@@ -1,0 +1,24 @@
+# AWS SAM / Lambda
+.aws-sam/
+samconfig.toml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+*.env
+.pytest_cache/
+
+# Project Specific
+/docs/
+.aws/
+node_modules/
+dist/
+build/
+packaged.yaml
+*.zip
+*.txt
+.aws-sam/
+samconfig.toml

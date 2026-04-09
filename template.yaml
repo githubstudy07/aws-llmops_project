@@ -1,0 +1,124 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  aws-llmops-project
+  SAM Template for LangGraph AI Agent with Bedrock, DynamoDB, and Fully Explicit API Gateway Auth
+
+Parameters:
+  CheckpointTableName:
+    Type: String
+    Default: handson-langgraph-checkpoints
+  WritesTableName:
+    Type: String
+    Default: handson-langgraph-writes
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 512
+    Runtime: python3.12
+    LoggingConfig:
+      LogFormat: JSON
+
+Resources:
+  # 1. Lambda 関数の定義
+  LangGraphAgentFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
+          CHECKPOINT_TABLE: !Ref CheckpointTableName
+          WRITES_TABLE: !Ref WritesTableName
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - bedrock:InvokeModel
+              Resource: "*"
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CheckpointTableName
+        - DynamoDBCrudPolicy:
+            TableName: !Ref WritesTableName
+
+  # 2. 完全明示的な API Gateway の定義
+  LangGraphApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: LangGraphApi
+      Description: API for LangGraph Agent
+
+  LangGraphApiChatResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      ParentId: !GetAtt LangGraphApi.RootResourceId
+      PathPart: chat
+      RestApiId: !Ref LangGraphApi
+
+  LangGraphApiChatMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      ApiKeyRequired: true
+      AuthorizationType: NONE
+      HttpMethod: POST
+      ResourceId: !Ref LangGraphApiChatResource
+      RestApiId: !Ref LangGraphApi
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LangGraphAgentFunction.Arn}/invocations"
+
+  LangGraphApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: LangGraphApiChatMethod
+    Properties:
+      RestApiId: !Ref LangGraphApi
+
+  LangGraphApiProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      DeploymentId: !Ref LangGraphApiDeployment
+      RestApiId: !Ref LangGraphApi
+      StageName: Prod
+
+  # 3. 認証リソース
+  LangGraphApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: LangGraphAgentKey
+      Enabled: true
+
+  LangGraphUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: LangGraphUsagePlan
+      ApiStages:
+        - ApiId: !Ref LangGraphApi
+          Stage: !Ref LangGraphApiProdStage
+    DependsOn: LangGraphApiProdStage
+
+  LangGraphUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref LangGraphApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref LangGraphUsagePlan
+
+  # 4. Lambda 実行権限の付与
+  LangGraphAgentFunctionChatApiPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LangGraphAgentFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LangGraphApi}/*/POST/chat"
+
+Outputs:
+  ChatApiEndpoint:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
+  ApiKeyId:
+    Description: "API Key ID"
+    Value: !Ref LangGraphApiKey
