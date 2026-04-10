@@ -13,30 +13,37 @@ def get_api_endpoint():
 
 def test_api():
     url = get_api_endpoint()
+    api_key = "vKi3EE5VUn76kdNFioDvtaoLtmuPKBz5FaesXwC9" # 2ccdd022... で取得した値
+    
     if not url:
         print("API Endpoint not found.")
         return
 
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key
+    }
+    
     print(f"Testing API Endpoint: {url}")
     session_id = f"test-{uuid.uuid4().hex[:8]}"
     
     # 1st request: Tell name
     payload1 = {
-        "input": "私の名前はナオジです。覚えておいてください。",
-        "thread_id": session_id
+        "message": "私の名前はナオジです。覚えておいてください。",
+        "session_id": session_id
     }
     print(f"\n--- Request 1 (Context Setting) ---")
-    response1 = requests.post(url, json=payload1)
+    response1 = requests.post(url, json=payload1, headers=headers)
     print(f"Status: {response1.status_code}")
     print(f"Response: {response1.json().get('response')}")
 
     # 2nd request: Ask name (to verify persistence)
     payload2 = {
-        "input": "私の名前は何ですか？",
-        "thread_id": session_id
+        "message": "私の名前は何ですか？",
+        "session_id": session_id
     }
     print(f"\n--- Request 2 (Persistence Verification) ---")
-    response2 = requests.post(url, json=payload2)
+    response2 = requests.post(url, json=payload2, headers=headers)
     print(f"Status: {response2.status_code}")
     print(f"Response: {response2.json().get('response')}")
 

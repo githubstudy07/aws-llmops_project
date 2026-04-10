@@ -29,7 +29,9 @@ jobs:
           pip install -r src/requirements.txt
           pip install pytest
       - name: Run tests
-        run: pytest tests/
+        run: |
+          export PYTHONPATH=$PYTHONPATH:.
+          pytest tests/
 
   deploy:
     needs: test # テストが成功した場合のみデプロイを実行

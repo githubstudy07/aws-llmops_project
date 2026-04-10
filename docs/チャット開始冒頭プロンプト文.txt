@@ -1,0 +1,4 @@
+「以下のファイルを読み込んで、[TRUSTED_STATE] と [AI_DIRECTIVES] に従ってハンズオンを再開してください。」
+C:\Users\naoji\Documents\projects\aws-llmops_project\docs\Progress_log.md
+C:\Users\naoji\Desktop\Naoji(ex)修理後\IT\AI\プロンプト\汎用_プロンプト制約_貼付け用.md
+※回答の冒頭では、必ず適用中のAI_DIRECTIVESのルール番号（例：[Rule 8]）を宣言し、工程を省略・要約せずに一歩ずつ進めてください。
