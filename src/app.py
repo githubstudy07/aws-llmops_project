@@ -70,7 +70,10 @@ class State(TypedDict):
     messages: Annotated[list, add_messages]
 
 # 2. Node (ノード) の定義: AI を呼び出す関数
-def chatbot(state: State, config: dict):
+def chatbot(state: State, config: dict = None):
+    # config が渡されない場合のガード
+    if config is None:
+        config = {}
     # Langfuse ハンドラーの取得 (追跡コンテキストの継承)
     callbacks = config.get("callbacks", [])
     handler = next((c for c in callbacks if isinstance(c, CallbackHandler)), None)
