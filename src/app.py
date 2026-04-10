@@ -214,6 +214,10 @@ def lambda_handler(event, context):
             response_text = last_msg.get("content", "")
         else:
             response_text = str(last_msg)
+
+        # 診断用のサフィックス追加
+        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else "Mock"
+        response_text += f"\n\n[System Info: {conn_type}]"
         
         return {
             "statusCode": 200,
