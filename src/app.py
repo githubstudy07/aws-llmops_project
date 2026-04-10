@@ -45,10 +45,11 @@ try:
     from langfuse import Langfuse
 except Exception as ie:
     try:
-        import langfuse
-        IMPORT_ERR = f"{str(ie)} | dir={dir(langfuse)} | file={getattr(langfuse, '__file__', 'unknown')}"
-    except:
-        IMPORT_ERR = str(ie)
+        import os
+        lib_path = os.path.dirname(os.path.abspath(langfuse.__file__))
+        IMPORT_ERR = f"{str(ie)} | path={lib_path} | files={os.listdir(lib_path)}"
+    except Exception as e2:
+        IMPORT_ERR = f"{str(ie)} | could not list files: {str(e2)}"
     
     class CallbackHandler:
         def __init__(self, *args, **kwargs):
