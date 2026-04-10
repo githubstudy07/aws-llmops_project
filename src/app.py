@@ -235,8 +235,13 @@ def lambda_handler(event, context):
             response_text = str(last_msg)
 
         # 診断用のサフィックス追加
-        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else f"Mock (ImportErr: {IMPORT_ERR})"
-        suffix = f"\n\n[System Info: {conn_type} | SSM_Names: {SSM_NAMES} | SSM_Err: {SSM_ERR}]"
+        handler_type = str(type(handler))
+        # 型名に 'langfuse' が含まれ、かつ 'mock' が含まれなければ Real と判定
+        is_real = handler is not None and "langfuse" in handler_type.lower() and "mock" not in handler_type.lower()
+        conn_type = "Real" if is_real else "Mock"
+        
+        conf_status = {k: "Present" if v else "Empty" for k, v in (LANGFUSE_CONF or {}).items()}
+        suffix = f"\n\n[Final Diagnosis: {conn_type} | Handler: {handler_type} | Conf: {conf_status} | SSM_Err: {SSM_ERR}]"
         response_text += suffix
         
         return {
