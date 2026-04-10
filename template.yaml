@@ -47,7 +47,9 @@ Resources:
               Action:
                 - ssm:GetParameter
                 - ssm:GetParametersByPath
-              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/"
 
   # 2. 完全明示的な API Gateway の定義
   LangGraphApi:
