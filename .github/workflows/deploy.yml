@@ -33,6 +33,6 @@ jobs:
             --stack-name handson-llmops-vfinal \
             --capabilities CAPABILITY_IAM \
             --region ap-northeast-1 \
+            --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --no-confirm-changeset \
-            --no-fail-on-empty-changeset \
-            --resolve-s3
+            --no-fail-on-empty-changeset
