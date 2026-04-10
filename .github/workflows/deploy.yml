@@ -3,13 +3,36 @@ name: Deploy SAM Application
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch: # GitHub Actions-⑭ 手動トリガー
+
+# GitHub Actions-⑬ Concurrency 制御: 前の実行が残っている場合はキャンセルしてコスト節約
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   id-token: write # OIDC 認証に必須
   contents: read  # ソースコード読み取りに必須
 
 jobs:
+  # GitHub Actions-5-2 テスト自動化
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r src/requirements.txt
+          pip install pytest
+      - name: Run tests
+        run: pytest tests/
+
   deploy:
+    needs: test # テストが成功した場合のみデプロイを実行
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

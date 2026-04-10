@@ -17,6 +17,29 @@ WRITES_TABLE = os.environ.get("WRITES_TABLE")
 config = Config(read_timeout=300, retries={'max_attempts': 3})
 client = boto3.client("bedrock-runtime", region_name=REGION, config=config)
 
+# Langfuse 設定の取得 (SSM Parameter Store)
+def get_langfuse_config():
+    ssm = boto3.client("ssm", region_name=REGION)
+    try:
+        # パラメータを一括取得
+        params = ssm.get_parameters_by_path(
+            Path="/handson/langfuse/",
+            WithDecryption=True
+        )["Parameters"]
+        
+        config_map = {p["Name"]: p["Value"] for p in params}
+        return {
+            "public_key": config_map.get("/handson/langfuse/public_key"),
+            "secret_key": config_map.get("/handson/langfuse/secret_key"),
+            "host": config_map.get("/handson/langfuse/host")
+        }
+    except Exception as e:
+        print(f"Warning: Failed to fetch Langfuse config from SSM: {e}")
+        return None
+
+LANGFUSE_CONF = get_langfuse_config()
+from langfuse.callback import CallbackHandler
+
 # 1. State (状態) の定義
 class State(TypedDict):
     messages: Annotated[list, add_messages]
@@ -76,11 +99,32 @@ def lambda_handler(event, context):
                 "body": json.dumps({"error": "Message is required"})
             }
 
+        # Langfuse コールバックの設定
+        callbacks = []
+        handler = None
+        if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
+            handler = CallbackHandler(
+                public_key=LANGFUSE_CONF["public_key"],
+                secret_key=LANGFUSE_CONF["secret_key"],
+                host=LANGFUSE_CONF["host"],
+                session_id=thread_id,
+                metadata={"user_input": user_input}
+            )
+            callbacks.append(handler)
+            print(f"Langfuse handler initialized for session: {thread_id}")
+        
         # LangGraph 実行
-        config = {"configurable": {"thread_id": thread_id}}
+        config = {
+            "configurable": {"thread_id": thread_id},
+            "callbacks": callbacks
+        }
         input_data = {"messages": [{"role": "user", "content": user_input}]}
         
         output = app.invoke(input_data, config)
+
+        # Langfuse データの送信を強制 (Lambda 終了前に必須)
+        if handler:
+            handler.flush()
         
         # 最後の AI メッセージを取得
         last_msg = output["messages"][-1]

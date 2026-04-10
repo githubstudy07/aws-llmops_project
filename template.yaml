@@ -42,6 +42,11 @@ Resources:
             TableName: !Ref CheckpointTableName
         - DynamoDBCrudPolicy:
             TableName: !Ref WritesTableName
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
 
   # 2. 完全明示的な API Gateway の定義
   LangGraphApi:
