@@ -48,11 +48,28 @@ LANGFUSE_CONF = get_langfuse_config()
 IMPORT_ERR = "None"
 try:
     import langfuse
-    # 物理パス /var/task/langfuse/langchain/callback.py に基づく
-    from langfuse.langchain.callback import CallbackHandler
+    # 全力で CallbackHandler を探す
+    found_path = "Not Found"
+    import os
+    for root, dirs, files in os.walk("/var/task/langfuse"):
+        if "callback.py" in files:
+            found_path = os.path.join(root, "callback.py")
+            break
+        if "callback" in dirs:
+            found_path = os.path.join(root, "callback")
+            break
+    
+    # 見つかったパスから推測してインポートを試みる
+    if "langchain" in found_path:
+        from langfuse.langchain.callback import CallbackHandler
+    elif "callback" in found_path:
+        from langfuse.callback import CallbackHandler
+    else:
+        from langfuse.callback import CallbackHandler # Default fallback
+        
     from langfuse import Langfuse
 except Exception as ie:
-    IMPORT_ERR = str(ie)
+    IMPORT_ERR = f"{str(ie)} | FoundPath={found_path}"
     class CallbackHandler:
         def __init__(self, *args, **kwargs):
             self.langfuse = Langfuse()
