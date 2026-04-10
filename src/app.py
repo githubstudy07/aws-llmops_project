@@ -77,10 +77,15 @@ def chatbot(state: State, config: dict):
 
     bedrock_messages = []
     for msg in state["messages"]:
-        role = "user" if msg.type == "human" else "assistant"
+        # オブジェクト型と辞書型の両方に対応
+        m_type = getattr(msg, "type", "") if not isinstance(msg, dict) else msg.get("type", msg.get("role", ""))
+        role = "user" if m_type in ["human", "user"] else "assistant"
+        
+        m_content = getattr(msg, "content", "") if not isinstance(msg, dict) else msg.get("content", "")
+        
         bedrock_messages.append({
             "role": role,
-            "content": [{"text": msg.content}]
+            "content": [{"text": m_content}]
         })
 
     # Generation (生成) の記録開始
@@ -163,47 +168,63 @@ def lambda_handler(event, context):
         callbacks = []
         handler = None
         if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
-            handler = CallbackHandler(
-                public_key=LANGFUSE_CONF["public_key"],
-                secret_key=LANGFUSE_CONF["secret_key"],
-                host=LANGFUSE_CONF["host"],
-                session_id=thread_id,
-                metadata={"user_input": user_input}
-            )
-            callbacks.append(handler)
-            print(f"Langfuse handler initialized for session: {thread_id}")
+            try:
+                handler = CallbackHandler(
+                    public_key=LANGFUSE_CONF["public_key"],
+                    secret_key=LANGFUSE_CONF["secret_key"],
+                    host=LANGFUSE_CONF["host"],
+                    session_id=thread_id,
+                    metadata={"user_input": user_input}
+                )
+                callbacks.append(handler)
+                print(f"Langfuse handler initialized for session: {thread_id}")
+            except Exception as e:
+                print(f"Warning: Failed to initialize CallbackHandler: {e}")
         
         # LangGraph 実行
-        config = {
+        graph_config = {
             "configurable": {"thread_id": thread_id},
             "callbacks": callbacks
         }
         input_data = {"messages": [{"role": "user", "content": user_input}]}
         
-        output = app.invoke(input_data, config)
+        output = app.invoke(input_data, graph_config)
 
         # Langfuse データの送信を強制 (Lambda 終了前に必須)
         if handler:
-            handler.flush()
+            try:
+                handler.flush()
+            except Exception as e:
+                print(f"Warning: Failed to flush Langfuse handler: {e}")
         
         # 最後の AI メッセージを取得
         last_msg = output["messages"][-1]
+        
+        # オブジェクト（AIMessage）と辞書（dict）の両方に対応
+        if hasattr(last_msg, "content"):
+            response_text = last_msg.content
+        elif isinstance(last_msg, dict):
+            response_text = last_msg.get("content", "")
+        else:
+            response_text = str(last_msg)
         
         return {
             "statusCode": 200,
             "headers": {
                 "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"  # CORS対応
+                "Access-Control-Allow-Origin": "*"
             },
             "body": json.dumps({
-                "response": last_msg.content,
+                "response": response_text,
                 "session_id": thread_id
             }, ensure_ascii=False)
         }
 
     except Exception as e:
-        print(f"Internal Error: {e}")
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"Internal Error: {e}\n{error_detail}")
         return {
             "statusCode": 500,
-            "body": json.dumps({"error": str(e)})
+            "body": json.dumps({"error": str(e), "detail": "Check CloudWatch logs for trace"})
         }
