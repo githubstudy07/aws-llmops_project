@@ -184,6 +184,13 @@ def lambda_handler(event, context):
             except Exception as e:
                 print(f"Warning: Failed to initialize CallbackHandler: {e}")
         
+        # デバッグ情報の収集
+        debug_info = {
+            "langfuse_conf_present": LANGFUSE_CONF is not None,
+            "langfuse_keys": list(LANGFUSE_CONF.keys()) if LANGFUSE_CONF else [],
+            "handler_initialized": handler is not None,
+        }
+        
         # LangGraph 実行
         graph_config = {
             "configurable": {"thread_id": thread_id},
@@ -219,7 +226,8 @@ def lambda_handler(event, context):
             },
             "body": json.dumps({
                 "response": response_text,
-                "session_id": thread_id
+                "session_id": thread_id,
+                "debug": debug_info  # 診断用に追加
             }, ensure_ascii=False)
         }
 
