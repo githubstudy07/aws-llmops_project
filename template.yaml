@@ -24,6 +24,8 @@ Resources:
   # 1. Lambda 関数の定義
   LangGraphAgentFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
@@ -32,8 +34,6 @@ Resources:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
           CHECKPOINT_TABLE: !Ref CheckpointTableName
           WRITES_TABLE: !Ref WritesTableName
-      Metadata:
-        BuildMethod: python3.12
       Policies:
         - Statement:
             - Effect: Allow
