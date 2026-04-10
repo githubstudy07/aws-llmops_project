@@ -94,10 +94,10 @@ def chatbot(state: State, config: dict = None):
                 # トークン使用量を連携 (コスト自動計算のトリガー)
                 generation.update(
                     output=output_text,
-                    usage={
-                        "input": usage.get("inputTokens", 0),
-                        "output": usage.get("outputTokens", 0),
-                        "total": usage.get("totalTokens", 0)
+                    usage_details={
+                        "input_tokens": usage.get("inputTokens", 0),
+                        "output_tokens": usage.get("outputTokens", 0),
+                        "total_tokens": usage.get("totalTokens", 0)
                     }
                 )
                 return {"messages": [{"role": "assistant", "content": output_text}]}
