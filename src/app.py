@@ -98,8 +98,12 @@ def chatbot(state: State, config: dict = None):
     generation = None
     if langfuse_client:
         try:
-            # We use global langfuse_client for manual tracking
+            # metadata から親トレースの ID を取得して紐付ける
+            metadata = config.get("metadata", {})
+            trace_id = metadata.get("langfuse_trace_id")
+            
             generation = langfuse_client.generation(
+                trace_id=trace_id,  # 親トレースと紐付け
                 name="bedrock-generation",
                 model=MODEL_ID,
                 model_parameters={"temperature": 0.7, "maxTokens": 300},
@@ -174,26 +178,23 @@ def lambda_handler(event, context):
         # Langfuse コールバックの設定
         callbacks = []
         handler = None
-        if CallbackHandler and LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
+        if langfuse_client and LANGFUSE_CONF:
             try:
-                # The keys are read from os.environ
-                handler = CallbackHandler(
+                # 修正: CallbackHandler に session_id は直接渡せずエラーになるため、
+                # まず Trace を作成し、そこから handler を取得する最新の方式を採用。
+                trace = langfuse_client.trace(
+                    name="chat-request",
                     session_id=thread_id,
                     metadata={"user_input": user_input}
                 )
+                handler = trace.get_langchain_handler()
                 callbacks.append(handler)
-                print(f"Langfuse handler initialized for session: {thread_id}")
-                
-                # Make sure the global langfuse_client respects the same trace context if possible
-                if langfuse_client:
-                    t_id = getattr(handler, "last_trace_id", None)
-                    if t_id:
-                        langfuse_client.trace(id=t_id, session_id=thread_id, metadata={"user_input": user_input})
+                print(f"Langfuse handler initialized via trace for session: {thread_id}")
 
             except Exception as e:
                 global INIT_ERR
                 INIT_ERR = str(e)
-                print(f"Warning: Failed to initialize CallbackHandler: {e}")
+                print(f"Warning: Failed to initialize Langfuse via trace-handler: {e}")
         
         # LangGraph 実行
         graph_config = {
@@ -202,14 +203,19 @@ def lambda_handler(event, context):
         }
         input_data = {"messages": [{"role": "user", "content": user_input}]}
         
+        # chatbot ノード内での manual generation との紐付けのため、
+        # config に trace_id を含めて渡す
+        if handler:
+            graph_config["metadata"] = {"langfuse_trace_id": handler.trace_id}
+
         output = app.invoke(input_data, graph_config)
 
         # Langfuse データの送信を強制 (Lambda 終了前に必須)
-        if handler:
+        if langfuse_client:
             try:
-                handler.flush()
+                langfuse_client.flush()
             except Exception as e:
-                print(f"Warning: Failed to flush Langfuse handler: {e}")
+                print(f"Warning: Failed to flush Langfuse client: {e}")
         
         # 最後の AI メッセージを取得
         last_msg = output["messages"][-1]

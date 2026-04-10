@@ -1,0 +1,10 @@
+①のファイルを読み込んで問題を作成してください。
+①C:\Users\naoji\Documents\projects\aws-llmops_project\docs\多肢選択問題ジェネレーター_ハンズオン用.md
+問題数は20問に変更でお願いします。
+出題の粒度と出題観点について
+②のディレクトリにある機能全体像の機能単位での理解、ユーザーが現場監督としてプロジェクトを進める想定での問題を作成してください。
+詳しくは③のファイルをよく読み込んで問題の作成をお願いします。
+②C:\Users\naoji\Desktop\Naoji(ex)修理後\IT\AI\プロンプト
+③C:\Users\naoji\Documents\projects\aws-llmops_project\docs\AI支援型ハンズオン学習カリキュラム.md
+また出力はC:\Users\naoji\Documents\projects\aws-llmops_project\docs\多肢選択問題03 .mdでお願いします。
+チャット欄には作成した問題は絶対に出力にしない。
