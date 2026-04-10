@@ -51,7 +51,8 @@ try:
     try:
         from langfuse.callback import CallbackHandler
     except ImportError:
-        from langfuse.langchain import CallbackHandler
+        # 物理構造スキャンで見つかった正しいパス
+        from langfuse.langchain.callback import CallbackHandler
     from langfuse import Langfuse
 except Exception as ie:
     try:
