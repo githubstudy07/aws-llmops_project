@@ -184,9 +184,11 @@ def lambda_handler(event, context):
                 callbacks.append(handler)
                 print(f"Langfuse handler initialized for session: {thread_id}")
                 
-                # Make sure the global langfuse_client respects the same trace context
+                # Make sure the global langfuse_client respects the same trace context if possible
                 if langfuse_client:
-                    langfuse_client.trace(id=handler.trace_id, session_id=thread_id, metadata={"user_input": user_input})
+                    t_id = getattr(handler, "last_trace_id", None)
+                    if t_id:
+                        langfuse_client.trace(id=t_id, session_id=thread_id, metadata={"user_input": user_input})
 
             except Exception as e:
                 global INIT_ERR
