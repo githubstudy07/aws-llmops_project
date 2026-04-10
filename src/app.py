@@ -38,22 +38,20 @@ def get_langfuse_config():
         return None
 
 LANGFUSE_CONF = get_langfuse_config()
-try:
-    from langfuse.callback import CallbackHandler
-    from langfuse import Langfuse
-except ImportError:
-    print("Warning: Langfuse SDK not found. Observation will be disabled.")
-    CallbackHandler = object
-    Langfuse = object
+from langfuse.callback import CallbackHandler
+from langfuse import Langfuse
 
 # Langfuse クライアントの初期化 (単体操作用)
 langfuse_client = None
 if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
-    langfuse_client = Langfuse(
-        public_key=LANGFUSE_CONF["public_key"],
-        secret_key=LANGFUSE_CONF["secret_key"],
-        host=LANGFUSE_CONF["host"]
-    )
+    try:
+        langfuse_client = Langfuse(
+            public_key=LANGFUSE_CONF["public_key"],
+            secret_key=LANGFUSE_CONF["secret_key"],
+            host=LANGFUSE_CONF["host"]
+        )
+    except Exception as e:
+        print(f"Warning: Failed to initialize Langfuse client: {e}")
 
 # 1. State (状態) の定義
 class State(TypedDict):
@@ -75,13 +73,16 @@ def chatbot(state: State, config: dict):
 
     # Generation (生成) の記録開始
     generation = None
-    if handler:
-        generation = handler.langfuse.generation(
-            name="bedrock-generation",
-            model=MODEL_ID,
-            model_parameters={"temperature": 0.7, "maxTokens": 300},
-            input=bedrock_messages
-        )
+    if handler and hasattr(handler, "langfuse"):
+        try:
+            generation = handler.langfuse.generation(
+                name="bedrock-generation",
+                model=MODEL_ID,
+                model_parameters={"temperature": 0.7, "maxTokens": 300},
+                input=bedrock_messages
+            )
+        except Exception as ge:
+            print(f"Warning: Failed to create Langfuse generation: {ge}")
 
     try:
         response = client.converse(
@@ -95,14 +96,17 @@ def chatbot(state: State, config: dict):
 
         # 成功時の記録
         if generation:
-            generation.end(
-                output=output_text,
-                usage={
-                    "input": usage.get("inputTokens", 0),
-                    "output": usage.get("outputTokens", 0),
-                    "total": usage.get("totalTokens", 0)
-                }
-            )
+            try:
+                generation.end(
+                    output=output_text,
+                    usage={
+                        "input": usage.get("inputTokens", 0),
+                        "output": usage.get("outputTokens", 0),
+                        "total": usage.get("totalTokens", 0)
+                    }
+                )
+            except Exception as ee:
+                print(f"Warning: Failed to end Langfuse generation: {ee}")
 
         return {"messages": [{"role": "assistant", "content": output_text}]}
     except Exception as e:
