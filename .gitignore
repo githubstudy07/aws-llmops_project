@@ -19,6 +19,6 @@ dist/
 build/
 packaged.yaml
 *.zip
-*.txt
+# *.txt (commented out to allow requirements.txt)
 .aws-sam/
 samconfig.toml
