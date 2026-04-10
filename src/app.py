@@ -41,13 +41,18 @@ LANGFUSE_CONF = get_langfuse_config()
 IMPORT_ERR = "None"
 try:
     import langfuse
-    from langfuse.callback import CallbackHandler
+    try:
+        from langfuse.callback import CallbackHandler
+    except ImportError:
+        from langfuse.langchain import CallbackHandler
     from langfuse import Langfuse
 except Exception as ie:
     try:
         import os
         lib_path = os.path.dirname(os.path.abspath(langfuse.__file__))
-        IMPORT_ERR = f"{str(ie)} | path={lib_path} | files={os.listdir(lib_path)}"
+        langchain_path = os.path.join(lib_path, "langchain")
+        lc_files = os.listdir(langchain_path) if os.path.isdir(langchain_path) else "not_a_dir"
+        IMPORT_ERR = f"{str(ie)} | lib_files={os.listdir(lib_path)} | lc_files={lc_files}"
     except Exception as e2:
         IMPORT_ERR = f"{str(ie)} | could not list files: {str(e2)}"
     
