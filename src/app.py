@@ -18,14 +18,19 @@ config = Config(read_timeout=300, retries={'max_attempts': 3})
 client = boto3.client("bedrock-runtime", region_name=REGION, config=config)
 
 # Langfuse 設定の取得 (SSM Parameter Store)
+SSM_ERR = "None"
+SSM_NAMES = []
 def get_langfuse_config():
+    global SSM_ERR, SSM_NAMES
     ssm = boto3.client("ssm", region_name=REGION)
     try:
         # パラメータを一括取得
-        params = ssm.get_parameters_by_path(
+        response = ssm.get_parameters_by_path(
             Path="/handson/langfuse/",
             WithDecryption=True
-        )["Parameters"]
+        )
+        params = response.get("Parameters", [])
+        SSM_NAMES = [p["Name"] for p in params]
         
         config_map = {p["Name"]: p["Value"] for p in params}
         return {
@@ -34,6 +39,7 @@ def get_langfuse_config():
             "host": config_map.get("/handson/langfuse/host")
         }
     except Exception as e:
+        SSM_ERR = str(e)
         print(f"Warning: Failed to fetch Langfuse config from SSM: {e}")
         return None
 
@@ -229,8 +235,9 @@ def lambda_handler(event, context):
             response_text = str(last_msg)
 
         # 診断用のサフィックス追加
-        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else f"Mock (Error: {IMPORT_ERR})"
-        response_text += f"\n\n[System Info: {conn_type}]"
+        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else f"Mock (ImportErr: {IMPORT_ERR})"
+        suffix = f"\n\n[System Info: {conn_type} | SSM_Names: {SSM_NAMES} | SSM_Err: {SSM_ERR}]"
+        response_text += suffix
         
         return {
             "statusCode": 200,
