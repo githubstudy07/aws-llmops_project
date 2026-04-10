@@ -40,10 +40,16 @@ def get_langfuse_config():
 LANGFUSE_CONF = get_langfuse_config()
 IMPORT_ERR = "None"
 try:
+    import langfuse
     from langfuse.callback import CallbackHandler
     from langfuse import Langfuse
 except Exception as ie:
-    IMPORT_ERR = str(ie)
+    try:
+        import langfuse
+        IMPORT_ERR = f"{str(ie)} | dir={dir(langfuse)} | file={getattr(langfuse, '__file__', 'unknown')}"
+    except:
+        IMPORT_ERR = str(ie)
+    
     class CallbackHandler:
         def __init__(self, *args, **kwargs):
             self.langfuse = Langfuse()
