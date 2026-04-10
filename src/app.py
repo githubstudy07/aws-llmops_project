@@ -48,22 +48,11 @@ LANGFUSE_CONF = get_langfuse_config()
 IMPORT_ERR = "None"
 try:
     import langfuse
-    try:
-        from langfuse.callback import CallbackHandler
-    except ImportError:
-        # 物理構造スキャンで見つかった正しいパス
-        from langfuse.langchain.callback import CallbackHandler
+    # 物理パス /var/task/langfuse/langchain/callback.py に基づく
+    from langfuse.langchain.callback import CallbackHandler
     from langfuse import Langfuse
 except Exception as ie:
-    try:
-        import os
-        lib_path = os.path.dirname(os.path.abspath(langfuse.__file__))
-        langchain_path = os.path.join(lib_path, "langchain")
-        lc_files = os.listdir(langchain_path) if os.path.isdir(langchain_path) else "not_a_dir"
-        IMPORT_ERR = f"{str(ie)} | lib_files={os.listdir(lib_path)} | lc_files={lc_files}"
-    except Exception as e2:
-        IMPORT_ERR = f"{str(ie)} | could not list files: {str(e2)}"
-    
+    IMPORT_ERR = str(ie)
     class CallbackHandler:
         def __init__(self, *args, **kwargs):
             self.langfuse = Langfuse()
@@ -245,7 +234,7 @@ def lambda_handler(event, context):
         conn_type = "Real" if is_real else "Mock"
         
         conf_status = {k: "Present" if v else "Empty" for k, v in (LANGFUSE_CONF or {}).items()}
-        suffix = f"\n\n[Final Diagnosis: {conn_type} | Handler: {handler_type} | Conf: {conf_status} | Init_Err: {INIT_ERR}]"
+        suffix = f"\n\n[Final Diagnosis: {conn_type} | Handler: {handler_type} | Conf: {conf_status} | Imp_Err: {IMPORT_ERR} | Init_Err: {INIT_ERR}]"
         response_text += suffix
         
         return {
