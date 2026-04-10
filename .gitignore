@@ -12,7 +12,7 @@ venv/
 .pytest_cache/
 
 # Project Specific
-/docs/
+# /docs/ (removed to track documentation)
 .aws/
 node_modules/
 dist/
