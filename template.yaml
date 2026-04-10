@@ -32,6 +32,8 @@ Resources:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
           CHECKPOINT_TABLE: !Ref CheckpointTableName
           WRITES_TABLE: !Ref WritesTableName
+      Metadata:
+        BuildMethod: python3.12
       Policies:
         - Statement:
             - Effect: Allow
