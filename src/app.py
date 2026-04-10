@@ -184,23 +184,6 @@ def lambda_handler(event, context):
             except Exception as e:
                 print(f"Warning: Failed to initialize CallbackHandler: {e}")
         
-        # デバッグ情報の収集
-        debug_info = {
-            "langfuse_conf_present": LANGFUSE_CONF is not None,
-            "langfuse_keys": list(LANGFUSE_CONF.keys()) if LANGFUSE_CONF else [],
-            "handler_initialized": handler is not None,
-            "langfuse_error": os.environ.get("LANGFUSE_DEBUG_ERROR", "None") # 後ほど関数内でセット
-        }
-        
-        # 暫定的なエラー取得ロジックの追加（一時的）
-        if not LANGFUSE_CONF:
-             # get_langfuse_config を再度呼び出し、エラーを捕捉する
-             try:
-                 test_client = boto3.client("ssm", region_name=REGION)
-                 test_client.get_parameters_by_path(Path="/handson/langfuse/", WithDecryption=True)
-             except Exception as ex:
-                 debug_info["langfuse_error"] = str(ex)
-
         # LangGraph 実行
         graph_config = {
             "configurable": {"thread_id": thread_id},
@@ -236,8 +219,7 @@ def lambda_handler(event, context):
             },
             "body": json.dumps({
                 "response": response_text,
-                "session_id": thread_id,
-                "debug": debug_info  # 診断用に追加
+                "session_id": thread_id
             }, ensure_ascii=False)
         }
 
