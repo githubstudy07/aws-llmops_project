@@ -45,56 +45,28 @@ def get_langfuse_config():
         return None
 
 LANGFUSE_CONF = get_langfuse_config()
-IMPORT_ERR = "None"
 try:
-    import langfuse
-    # 全力で CallbackHandler を探す
-    found_path = "Not Found"
-    import os
-    for root, dirs, files in os.walk("/var/task/langfuse"):
-        if "callback.py" in files:
-            found_path = os.path.join(root, "callback.py")
-            break
-        if "callback" in dirs:
-            found_path = os.path.join(root, "callback")
-            break
-    
-    # 見つかったパスから推測してインポートを試みる
-    if "langchain" in found_path:
-        from langfuse.langchain.callback import CallbackHandler
-    elif "callback" in found_path:
-        from langfuse.callback import CallbackHandler
-    else:
-        from langfuse.callback import CallbackHandler # Default fallback
-        
+    from langfuse.langchain import CallbackHandler
     from langfuse import Langfuse
-except Exception as ie:
-    IMPORT_ERR = f"{str(ie)} | FoundPath={found_path}"
-    class CallbackHandler:
-        def __init__(self, *args, **kwargs):
-            self.langfuse = Langfuse()
-            self.raise_error = False
-        def flush(self): pass
-        def __getattr__(self, name):
-            return lambda *args, **kwargs: None
-    class Langfuse:
-        def __init__(self, *args, **kwargs): pass
-        def generation(self, *args, **kwargs):
-            class MockGen:
-                def end(self, *args, **kwargs): pass
-            return MockGen()
+    IMPORT_ERR = "None"
+except ImportError as e:
+    IMPORT_ERR = str(e)
+    CallbackHandler = None
+    Langfuse = None
 
-# Langfuse クライアントの初期化 (単体操作用)
-langfuse_client = None
+# Set environment variables for Langfuse so CallbackHandler picks them up
 if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
+    os.environ["LANGFUSE_PUBLIC_KEY"] = LANGFUSE_CONF["public_key"]
+    os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_CONF["secret_key"]
+    os.environ["LANGFUSE_HOST"] = LANGFUSE_CONF["host"]
+
+# Initialize a global client for manual tracking if needed
+langfuse_client = None
+if Langfuse and LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
     try:
-        langfuse_client = Langfuse(
-            public_key=LANGFUSE_CONF["public_key"],
-            secret_key=LANGFUSE_CONF["secret_key"],
-            host=LANGFUSE_CONF["host"]
-        )
+        langfuse_client = Langfuse()
     except Exception as e:
-        print(f"Warning: Failed to initialize Langfuse client: {e}")
+        print(f"Warning: Failed to initialize global Langfuse client: {e}")
 
 # 1. State (状態) の定義
 class State(TypedDict):
@@ -124,9 +96,10 @@ def chatbot(state: State, config: dict = None):
 
     # Generation (生成) の記録開始
     generation = None
-    if handler and hasattr(handler, "langfuse"):
+    if langfuse_client:
         try:
-            generation = handler.langfuse.generation(
+            # We use global langfuse_client for manual tracking
+            generation = langfuse_client.generation(
                 name="bedrock-generation",
                 model=MODEL_ID,
                 model_parameters={"temperature": 0.7, "maxTokens": 300},
@@ -201,17 +174,20 @@ def lambda_handler(event, context):
         # Langfuse コールバックの設定
         callbacks = []
         handler = None
-        if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
+        if CallbackHandler and LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
             try:
+                # The keys are read from os.environ
                 handler = CallbackHandler(
-                    public_key=LANGFUSE_CONF["public_key"],
-                    secret_key=LANGFUSE_CONF["secret_key"],
-                    host=LANGFUSE_CONF["host"],
                     session_id=thread_id,
                     metadata={"user_input": user_input}
                 )
                 callbacks.append(handler)
                 print(f"Langfuse handler initialized for session: {thread_id}")
+                
+                # Make sure the global langfuse_client respects the same trace context
+                if langfuse_client:
+                    langfuse_client.trace(id=handler.trace_id, session_id=thread_id, metadata={"user_input": user_input})
+
             except Exception as e:
                 global INIT_ERR
                 INIT_ERR = str(e)
@@ -246,8 +222,7 @@ def lambda_handler(event, context):
 
         # 診断用のサフィックス追加
         handler_type = str(type(handler))
-        # 型名に 'langfuse' が含まれ、かつ 'mock' が含まれなければ Real と判定
-        is_real = handler is not None and "langfuse" in handler_type.lower() and "mock" not in handler_type.lower()
+        is_real = handler is not None
         conn_type = "Real" if is_real else "Mock"
         
         conf_status = {k: "Present" if v else "Empty" for k, v in (LANGFUSE_CONF or {}).items()}

@@ -3,4 +3,5 @@ botocore>=1.35.81
 langgraph
 langgraph-checkpoint-dynamodb
 python-dotenv
+langchain
 langfuse>=2.57.0

@@ -15,7 +15,7 @@
 | No | 区分 | サービス名-機能番号 | 機能名 | 確認項目 (要件) | 監督のチェックポイント | 証跡 (エビデンス) | 判定 |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | 1 | **②非機能** | Langfuse-⑮/SSM | 環境準備 & セットアップ | アカウント作成とSSM連携 | SSM パラメータストアにキーが安全に保存されているか？ | `/handson/langfuse/` 配下のパラメータ存在を確認済み（下記ログ参照） | ✅ |
-| 2 | **①機能** | Langfuse-① | トレーシング追加 | LLM 呼び出しの可視化 | プロンプト・回答・モデル名が表示されるか？ | ── | ── |
+| 2 | **①機能** | Langfuse-① | トレーシング追加 | LLM 呼び出しの可視化 | プロンプト・回答・モデル名が表示されるか？ | Langfuse ダッシュボードにてトレース確認済み | ✅ |
 | 3 | **①機能** | Langfuse-⑪ | コスト自動計算 | 実行単価の把握 | 各リクエストのコストが表示されているか？ | ── | ── |
 | 4 | **①機能** | Langfuse-③ | スコアリング | ユーザー評価の記録 | 回答への Good/Bad 等を記録できるか？ | ── | ── |
 | 5 | **②非機能** | Langfuse-⑩ | セッション管理 | 会話の文脈追跡 | 複数回会話が 1 つのスレッドとして見えるか？ | ── | ── |
@@ -163,6 +163,26 @@
         "/handson/langfuse/secret_key"
     ]
     ```
+*   **セッション 12: Phase 6 実装・検証ログ**
+    #### 1. リモート疎通確認 (API Gateway -> Lambda -> Bedrock)
+    ```bash
+    > .venv\Scripts\python remote_test.py
+    Testing API Endpoint: https://rxajg598kk.execute-api.ap-northeast-1.amazonaws.com/Prod/chat
+
+    --- Request 1 (Context Setting) ---
+    Status: 200
+    Response: わかりました、ナオジさん。覚えておきます。お手伝いできることがあれば教えてくださいね。
+
+    --- Request 2 (Persistence Verification) ---
+    Status: 200
+    Response: あなたはナオジさんです。私の記憶はしっかりしています。他に何か質問はありますか？
+    ```
+
+    #### 2. Langfuse 連携の確認事項 ( Plan C 適用済み )
+    - **Generation**: `bedrock-generation` として手動記録。
+    - **Usage**: Bedrock の `usage` (Tokens) を正確にキャプチャ。
+    - **Metadata**: `session_id`, `user_input` などをメタデータに格納。
+    - **Robustness**: Langfuse SDK 不在時や SSM 権限不足時でもメイン機能を阻害しないガード実装済み。
 
 ---
 
