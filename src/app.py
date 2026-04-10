@@ -38,8 +38,13 @@ def get_langfuse_config():
         return None
 
 LANGFUSE_CONF = get_langfuse_config()
-from langfuse.callback import CallbackHandler
-from langfuse import Langfuse
+try:
+    from langfuse.callback import CallbackHandler
+    from langfuse import Langfuse
+except ImportError:
+    print("Warning: Langfuse SDK not found. Observation will be disabled.")
+    CallbackHandler = object
+    Langfuse = object
 
 # Langfuse クライアントの初期化 (単体操作用)
 langfuse_client = None
