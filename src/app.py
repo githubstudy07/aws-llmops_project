@@ -39,13 +39,27 @@ def get_langfuse_config():
 
 LANGFUSE_CONF = get_langfuse_config()
 from langfuse.callback import CallbackHandler
+from langfuse import Langfuse
+
+# Langfuse クライアントの初期化 (単体操作用)
+langfuse_client = None
+if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
+    langfuse_client = Langfuse(
+        public_key=LANGFUSE_CONF["public_key"],
+        secret_key=LANGFUSE_CONF["secret_key"],
+        host=LANGFUSE_CONF["host"]
+    )
 
 # 1. State (状態) の定義
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
 # 2. Node (ノード) の定義: AI を呼び出す関数
-def chatbot(state: State):
+def chatbot(state: State, config: dict):
+    # Langfuse ハンドラーの取得 (追跡コンテキストの継承)
+    callbacks = config.get("callbacks", [])
+    handler = next((c for c in callbacks if isinstance(c, CallbackHandler)), None)
+
     bedrock_messages = []
     for msg in state["messages"]:
         role = "user" if msg.type == "human" else "assistant"
@@ -54,6 +68,16 @@ def chatbot(state: State):
             "content": [{"text": msg.content}]
         })
 
+    # Generation (生成) の記録開始
+    generation = None
+    if handler:
+        generation = handler.langfuse.generation(
+            name="bedrock-generation",
+            model=MODEL_ID,
+            model_parameters={"temperature": 0.7, "maxTokens": 300},
+            input=bedrock_messages
+        )
+
     try:
         response = client.converse(
             modelId=MODEL_ID,
@@ -61,9 +85,24 @@ def chatbot(state: State):
             system=[{"text": "あなたは簡潔に回答する、親切な AI アシスタントです。"}],
             inferenceConfig={"maxTokens": 300, "temperature": 0.7}
         )
+        usage = response.get("usage", {})
         output_text = response["output"]["message"]["content"][0]["text"]
+
+        # 成功時の記録
+        if generation:
+            generation.end(
+                output=output_text,
+                usage={
+                    "input": usage.get("inputTokens", 0),
+                    "output": usage.get("outputTokens", 0),
+                    "total": usage.get("totalTokens", 0)
+                }
+            )
+
         return {"messages": [{"role": "assistant", "content": output_text}]}
     except Exception as e:
+        if generation:
+            generation.end(level="ERROR", status_message=str(e))
         print(f"Error invoking Bedrock: {e}")
         return {"messages": [{"role": "assistant", "content": f"エラーが発生しました。"}]}
 
