@@ -1,0 +1,38 @@
+name: Deploy SAM Application
+
+on:
+  push:
+    branches: [ "main" ]
+
+permissions:
+  id-token: write # OIDC 認証に必須
+  contents: read  # ソースコード読み取りに必須
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # GitHub Actions-④ アクション利用
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::891377371917:role/github-actions-deployment-role
+          aws-region: ap-northeast-1
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: SAM Build
+        run: sam build
+
+      - name: SAM Deploy
+        run: |
+          sam deploy \
+            --stack-name handson-llmops-vfinal \
+            --capabilities CAPABILITY_IAM \
+            --region ap-northeast-1 \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3
