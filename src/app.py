@@ -20,6 +20,7 @@ client = boto3.client("bedrock-runtime", region_name=REGION, config=config)
 # Langfuse 設定の取得 (SSM Parameter Store)
 SSM_ERR = "None"
 SSM_NAMES = []
+INIT_ERR = "None"
 def get_langfuse_config():
     global SSM_ERR, SSM_NAMES
     ssm = boto3.client("ssm", region_name=REGION)
@@ -205,6 +206,8 @@ def lambda_handler(event, context):
                 callbacks.append(handler)
                 print(f"Langfuse handler initialized for session: {thread_id}")
             except Exception as e:
+                global INIT_ERR
+                INIT_ERR = str(e)
                 print(f"Warning: Failed to initialize CallbackHandler: {e}")
         
         # LangGraph 実行
@@ -241,7 +244,7 @@ def lambda_handler(event, context):
         conn_type = "Real" if is_real else "Mock"
         
         conf_status = {k: "Present" if v else "Empty" for k, v in (LANGFUSE_CONF or {}).items()}
-        suffix = f"\n\n[Final Diagnosis: {conn_type} | Handler: {handler_type} | Conf: {conf_status} | SSM_Err: {SSM_ERR}]"
+        suffix = f"\n\n[Final Diagnosis: {conn_type} | Handler: {handler_type} | Conf: {conf_status} | Init_Err: {INIT_ERR}]"
         response_text += suffix
         
         return {
