@@ -44,8 +44,12 @@ try:
 except ImportError:
     print("Warning: Langfuse SDK not found. Observation will be disabled.")
     class CallbackHandler:
-        def __init__(self, *args, **kwargs): self.langfuse = Langfuse()
+        def __init__(self, *args, **kwargs):
+            self.langfuse = Langfuse()
+            self.raise_error = False
         def flush(self): pass
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
     class Langfuse:
         def __init__(self, *args, **kwargs): pass
         def generation(self, *args, **kwargs):
