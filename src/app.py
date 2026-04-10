@@ -38,11 +38,12 @@ def get_langfuse_config():
         return None
 
 LANGFUSE_CONF = get_langfuse_config()
+IMPORT_ERR = "None"
 try:
     from langfuse.callback import CallbackHandler
     from langfuse import Langfuse
-except ImportError:
-    print("Warning: Langfuse SDK not found. Observation will be disabled.")
+except Exception as ie:
+    IMPORT_ERR = str(ie)
     class CallbackHandler:
         def __init__(self, *args, **kwargs):
             self.langfuse = Langfuse()
@@ -216,7 +217,7 @@ def lambda_handler(event, context):
             response_text = str(last_msg)
 
         # 診断用のサフィックス追加
-        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else "Mock"
+        conn_type = "Real" if handler and "langfuse.callback" in str(type(handler)) else f"Mock (Error: {IMPORT_ERR})"
         response_text += f"\n\n[System Info: {conn_type}]"
         
         return {
