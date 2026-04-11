@@ -22,7 +22,7 @@ def test_lambda_handler_chat_route(env_setup):
         # CallbackHandler が正常にインスタンス化された体にする
         mock_cb_class.side_effect = lambda: mock_handler 
         
-        mock_handler.get_trace_id.return_value = "test-trace-id-123"
+        mock_handler.last_trace_id = "test-trace-id-123"
         
         event = {
             "resource": "/chat",

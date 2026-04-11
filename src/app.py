@@ -190,7 +190,7 @@ def lambda_handler(event, context):
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
 
         # トレースIDの取得
-        trace_id = handler.get_trace_id() if handler else None
+        trace_id = getattr(handler, "last_trace_id", None) if handler else None
 
         # 診断サフィックス
         conn_type = "Real" if handler else "Mock"
