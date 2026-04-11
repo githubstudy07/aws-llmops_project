@@ -140,7 +140,7 @@ def lambda_handler(event, context):
                 return {"statusCode": 400, "body": json.dumps({"error": "trace_id and score_value are required"})}
                 
             if langfuse_client:
-                langfuse_client.score(
+                langfuse_client.create_score(
                     trace_id=trace_id,
                     name=body.get("score_name", "user-feedback"),
                     value=score_value,
