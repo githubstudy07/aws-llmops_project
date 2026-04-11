@@ -129,7 +129,33 @@ app = workflow.compile(checkpointer=checkpointer)
 def lambda_handler(event, context):
     INIT_ERR = "None"
     try:
+        path = event.get("resource", "/chat")
         body = json.loads(event.get("body", "{}"))
+
+        if path == "/feedback":
+            trace_id = body.get("trace_id")
+            score_value = body.get("score_value")
+            
+            if not trace_id or score_value is None:
+                return {"statusCode": 400, "body": json.dumps({"error": "trace_id and score_value are required"})}
+                
+            if langfuse_client:
+                langfuse_client.score(
+                    trace_id=trace_id,
+                    name=body.get("score_name", "user-feedback"),
+                    value=score_value,
+                    comment=body.get("comment", "")
+                )
+                langfuse_client.flush()
+                return {
+                    "statusCode": 200,
+                    "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
+                    "body": json.dumps({"status": "success", "message": "Score recorded"})
+                }
+            else:
+                return {"statusCode": 500, "body": json.dumps({"error": "Langfuse client not initialized"})}
+
+        # /chat endpoint handling
         user_input = body.get("message")
         thread_id = body.get("session_id", "default-session")
 
@@ -163,6 +189,9 @@ def lambda_handler(event, context):
         last_msg = output["messages"][-1]
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
 
+        # トレースIDの取得
+        trace_id = handler.get_trace_id() if handler else None
+
         # 診断サフィックス
         conn_type = "Real" if handler else "Mock"
         suffix = f"\n\n[Final Diagnosis: {conn_type} | Imp_Err: {IMPORT_ERR} | Init_Err: {INIT_ERR}]"
@@ -170,7 +199,11 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
-            "body": json.dumps({"response": response_text + suffix, "session_id": thread_id}, ensure_ascii=False)
+            "body": json.dumps({
+                "response": response_text + suffix,
+                "session_id": thread_id,
+                "trace_id": trace_id
+            }, ensure_ascii=False)
         }
 
     except Exception as e:
