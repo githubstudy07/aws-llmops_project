@@ -59,7 +59,7 @@ def test_lambda_handler_feedback_route(env_setup):
         assert body["status"] == "success"
         
         # Langfuse client が呼ばれたか
-        mock_lf.score.assert_called_once_with(
+        mock_lf.create_score.assert_called_once_with(
             trace_id="test-trace-id-456",
             name="user-feedback",
             value=1,
