@@ -2,13 +2,14 @@ import json
 import os
 import sys
 import sqlite3
+from crew_marketing import create_marketing_crew
 
 def lambda_handler(event, context):
     """
     CrewAI 実行用の Lambda ハンドラー。
     """
     try:
-        # 1. 入力の取得
+        # 1. 入力の取得 (API Gateway または直接呼び出し)
         body = event.get("body", "{}")
         if isinstance(body, str):
             params = json.loads(body)
@@ -32,7 +33,6 @@ def lambda_handler(event, context):
             }
 
         # 2. CrewAI の初期化と実行
-        from crew_marketing import create_marketing_crew
         target_product = params.get("target_product", "AI搭載のスマート水筒")
         
         # ★ インポート済みのファクトリ関数から Crew を作成
@@ -59,6 +59,10 @@ def lambda_handler(event, context):
         print(f"Error: {str(e)}")
         return {
             "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*"
+            },
             "body": json.dumps({
                 "status": "error",
                 "message": str(e)
