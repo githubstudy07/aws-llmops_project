@@ -55,15 +55,19 @@ if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
 
 # 5. クライアントの初期化
 langfuse_client = None
+LF_INIT_ERR = "None"
 if LANGFUSE_CONF and get_client:
     try:
         langfuse_client = get_client(
-            public_key=LANGFUSE_CONF["public_key"],
-            secret_key=LANGFUSE_CONF["secret_key"],
-            host=LANGFUSE_CONF["host"]
+            public_key=LANGFUSE_CONF.get("public_key"),
+            secret_key=LANGFUSE_CONF.get("secret_key"),
+            host=LANGFUSE_CONF.get("host")
         )
     except Exception as e:
+        LF_INIT_ERR = f"ClientInitError: {str(e)}"
         print(f"Error: Failed to initialize Langfuse client: {e}")
+else:
+    LF_INIT_ERR = f"ConfOrImportError: Conf={bool(LANGFUSE_CONF)}, Import={bool(get_client)}"
 
 # 1. State (状態) の定義
 class State(TypedDict):
@@ -227,20 +231,27 @@ def lambda_handler(event, context):
         last_msg = output["messages"][-1]
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
 
-        # 3. メタデータの最終抽出
-        # chatbot ノードが返却した {"messages": [{"metadata": {...}}]} を確実に拾う
-        prompt_source_info = "unknown"
+        # 3. メタデータの詳細抽出 (診断用)
+        diagnostic_info = {
+            "prompt_tag": "missing",
+            "init_err": LF_INIT_ERR,
+            "import_err": IMPORT_ERR,
+            "has_client": bool(langfuse_client)
+        }
+        
         if isinstance(last_msg, dict):
-            prompt_source_info = last_msg.get("metadata", {}).get("prompt_source", "unknown_nested_metadata")
-            if prompt_source_info == "unknown_nested_metadata":
-                prompt_source_info = last_msg.get("prompt_source", "unknown_dict_root")
-        elif hasattr(last_msg, "response_metadata") and isinstance(last_msg.response_metadata, dict):
-            prompt_source_info = last_msg.response_metadata.get("prompt_source", "unknown_response_metadata")
-        elif hasattr(last_msg, "additional_kwargs") and isinstance(last_msg.additional_kwargs, dict):
-            prompt_source_info = last_msg.additional_kwargs.get("metadata", {}).get("prompt_source", 
-                                  last_msg.additional_kwargs.get("prompt_source", "unknown_additional_kwargs"))
+            diagnostic_info["prompt_tag"] = last_msg.get("metadata", {}).get("prompt_source", last_msg.get("prompt_source", "unknown_dict"))
+        else:
+            for attr in ["response_metadata", "additional_kwargs"]:
+                if hasattr(last_msg, attr):
+                    val = getattr(last_msg, attr)
+                    if isinstance(val, dict):
+                        diagnostic_info[f"attr_{attr}"] = str(val)[:200]
+                        if "prompt_source" in val:
+                            diagnostic_info["prompt_tag"] = val["prompt_source"]
+                        elif "metadata" in val and isinstance(val["metadata"], dict) and "prompt_source" in val["metadata"]:
+                            diagnostic_info["prompt_tag"] = val["metadata"]["prompt_source"]
 
-        # トレースIDの取得
         trace_id = getattr(handler, "last_trace_id", None) if handler else None
 
         return {
@@ -250,7 +261,7 @@ def lambda_handler(event, context):
                 "response": response_text,
                 "session_id": thread_id,
                 "trace_id": trace_id,
-                "prompt_source": prompt_source_info
+                "prompt_source": str(diagnostic_info)
             }, ensure_ascii=False)
         }
 
