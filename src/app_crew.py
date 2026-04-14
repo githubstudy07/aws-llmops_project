@@ -1,5 +1,6 @@
 import json
 import os
+from crew_marketing import create_marketing_crew
 
 
 def lambda_handler(event, context):
@@ -18,8 +19,7 @@ def lambda_handler(event, context):
         target_product = params.get("target_product", "AI搭載のスマート水筒")
 
         # 2. CrewAI の初期化と実行
-        # ★ 呼び出し時に初めて Crew を作成する（遅延初期化）
-        from crew_marketing import create_marketing_crew
+        # ★ インポート済みのファクトリ関数から Crew を作成
         crew = create_marketing_crew()
 
         print(f"Starting CrewAI for product: {target_product}")
