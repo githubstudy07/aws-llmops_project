@@ -104,8 +104,6 @@ def chatbot(state: State, config: dict = None):
         except Exception as e:
             msg = str(e)
             print(f"Warning: Failed to fetch prompt from Langfuse, using default: {msg}")
-            # エラーの詳細をメタデータに含める (診断用)
-            prompt_tag = f"fallback (err: {msg[:500]})"
 
     # [Option A] コスト管理 & トレーシング
     if langfuse_client:
@@ -232,37 +230,15 @@ def lambda_handler(event, context):
         last_msg = output["messages"][-1]
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
 
-        # 3. メタデータの詳細抽出 (診断用)
-        diagnostic_info = {
-            "prompt_tag": "missing",
-            "init_err": LF_INIT_ERR,
-            "import_err": IMPORT_ERR,
-            "has_client": bool(langfuse_client)
-        }
-        
-        if isinstance(last_msg, dict):
-            diagnostic_info["prompt_tag"] = last_msg.get("metadata", {}).get("prompt_source", last_msg.get("prompt_source", "unknown_dict"))
-        else:
-            for attr in ["response_metadata", "additional_kwargs"]:
-                if hasattr(last_msg, attr):
-                    val = getattr(last_msg, attr)
-                    if isinstance(val, dict):
-                        diagnostic_info[f"attr_{attr}"] = str(val)[:200]
-                        if "prompt_source" in val:
-                            diagnostic_info["prompt_tag"] = val["prompt_source"]
-                        elif "metadata" in val and isinstance(val["metadata"], dict) and "prompt_source" in val["metadata"]:
-                            diagnostic_info["prompt_tag"] = val["metadata"]["prompt_source"]
-
         trace_id = getattr(handler, "last_trace_id", None) if handler else None
-
+        
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
             "body": json.dumps({
                 "response": response_text,
                 "session_id": thread_id,
-                "trace_id": trace_id,
-                "prompt_source": str(diagnostic_info)
+                "trace_id": trace_id
             }, ensure_ascii=False)
         }
 

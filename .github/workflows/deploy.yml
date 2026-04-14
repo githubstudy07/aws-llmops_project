@@ -60,4 +60,5 @@ jobs:
             --region ap-northeast-1 \
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --no-confirm-changeset \
-            --no-fail-on-empty-changeset
+            --no-fail-on-empty-changeset \
+            --resolve-image-repos

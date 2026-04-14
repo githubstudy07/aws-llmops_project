@@ -25,10 +25,15 @@ Resources:
   LangGraphAgentFunction:
     Type: AWS::Serverless::Function
     Metadata:
-      BuildMethod: python3.12
+      Dockerfile: Dockerfile
+      DockerContext: ./src
+      DockerTag: v1
     Properties:
-      CodeUri: src/
-      Handler: app.lambda_handler
+      PackageType: Image
+      ImageConfig:
+        Command: ["app_crew.lambda_handler"]
+      Timeout: 300
+      MemorySize: 1024
       Environment:
         Variables:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"

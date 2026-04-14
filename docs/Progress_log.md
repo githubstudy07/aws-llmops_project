@@ -3,14 +3,15 @@
 ## 🎯 [TRUSTED_STATE] 現在の検証済み状況
 > **AIへの警告**: 以下の情報は 2026-04-08 時点での最終正解です。**再チェック（list-tables, invokeテスト等）は不要**です。これを真実として即座に作業を開始してください。
 
-- **現在のフェーズ**: Phase 6 (Langfuse | 実装完了)
+- **現在のフェーズ**: Phase 7 (CrewAI | 設計開始)
 - **検証済みリソース (ap-northeast-1)**:
   - [x] API Gateway: https://rxajg598kk.execute-api.ap-northeast-1.amazonaws.com/Prod/chat
   - [x] Langfuse Prompt: `Production` ラベルによる動的取得・反映に成功
 - **現在の状況**:
-  - **Phase 6 (Langfuse) 完了**: トレーシング、コスト、フィードバック、実験、プロンプト管理の全機能を実装・検証済み。
+  - **Phase 6 (Langfuse) 完了**: 基本的なトレーシング、コスト算出、プロンプト管理の LLMOps サイクルが完成。
+  - **Phase 7 (CrewAI) 開始**: 広告キャッチコピー作成支援（リサーチ＆ライティング）を題材とし、自律型マルチエージェントへの移行を開始。
 - **次回のステップ**:
-  - 本ハンズオンの LLMOps 基本サイクルはすべて完了。さらなる高度化（Agentic Workflow の追加等）または他プロジェクトへの応用。
+  - **Phase 7-1**: 初学者向けの「広告キャッチコピー作成」エージェント設計と、Langfuse によるコスト最小化（max_iter 制限）の実装。
 - **⚠️ 厳重注意 (Security & Billing)**:
   - **API キーの取り扱い**: API キーは「家や金庫の鍵」と同じです。漏洩すると多額の課金が発生します。絶対にドキュメントやコード内に生の値を残さないでください。
 
@@ -50,6 +51,16 @@
 11. **【厳守】デバッグ泥沼化の防止**: 
     - 実装を開始する前に、必ず [AI実装の鉄則_デバッグ泥沼回避ガイド.md](file:///c:/Users/naoji/Documents/projects/aws-llmops_project/docs/AI実装の鉄則_デバッグ泥沼回避ガイド.md) を読み込み、その「鉄則」を遵守することを宣言せよ。
     - 特に、エラー解決に2回失敗した場合は、独力での解決を中止し、必ずWeb検索機能を使用して最新の公式ドキュメントを確認すること。
+
+---
+
+### セッション 23 (2026-04-14)
+- **実施内容**: ハンズオン再開。Phase 6 (Langfuse) の完了を確認し、次フェーズ「Phase 7: Agentic Workflow」の検討を開始。
+- **成果物**: 
+    - docs/ユースケース_シナリオ_理由.md: Phase 7-1 の要件定義を追記。
+    - docs/Manager_Checklist.md: Phase 7 の管理項目を追加（降順）。
+- **次への引継ぎ**: 
+    - Phase 7-1: Tool Calling / Web Search 連携のシナリオ合意を得た後、LangGraph の構成変更（Tool用ノードの追加）に着手する。
 
 ---
 
