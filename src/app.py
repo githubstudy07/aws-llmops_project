@@ -92,11 +92,11 @@ def chatbot(state: State, config: dict = None):
 
     if langfuse_client:
         try:
-            # Langfuse から対象のプロンプトを取得 (ラベル 'Production' を指定)
+            # Langfuse から対象のプロンプトを取得 (ラベル 'production' を指定)
             # 理由: Langfuse のラベルはケースセンシティブであり、画面上の表示に合わせるため
             langfuse_prompt = langfuse_client.get_prompt(
                 "main-chatbot-prompt",
-                label="Production",
+                label="production",
                 cache_ttl_seconds=0
             )
             system_prompt = langfuse_prompt.compile()
