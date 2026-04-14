@@ -1,3 +1,11 @@
+# 1. SQLite3 のバージョン問題を解決するために pysqlite3 を優先的にロード
+try:
+    import pysqlite3
+    import sys
+    sys.modules["sqlite3"] = pysqlite3
+except ImportError:
+    pass
+
 import json
 import os
 import sys

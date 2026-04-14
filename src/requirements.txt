@@ -8,3 +8,4 @@ langfuse>=2.57.0
 crewai
 langchain-aws
 openinference-instrumentation-crewai
+pysqlite3-binary

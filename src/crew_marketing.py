@@ -7,9 +7,15 @@ from openinference.instrumentation.crewai import CrewAIInstrumentor
 def create_marketing_crew():
     """
     マーケティング用 Crew を作成して返す。
-    呼び出し時に初めて LLM と Agent が初期化されるため、
-    テスト時にはモック化が容易になる。
     """
+
+    # 0. Lambda の書き込み制限（/tmp のみ）に対応するための設定
+    os.environ["MEM0_DIR"] = "/tmp/mem0"
+    os.environ["CHROMA_DB_DIR"] = "/tmp/chroma_db"
+    os.environ["CONFIG_DIR"] = "/tmp/config"
+    os.makedirs("/tmp/mem0", exist_ok=True)
+    os.makedirs("/tmp/chroma_db", exist_ok=True)
+    os.makedirs("/tmp/config", exist_ok=True)
 
     # 1. 観測性 (Langfuse) のセットアップ
     CrewAIInstrumentor().instrument()
