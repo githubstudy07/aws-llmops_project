@@ -2,9 +2,9 @@
 FROM public.ecr.aws/lambda/python:3.12
 
 # 2. ビルドツールのインストール
-# イメージの OS バージョンに合わせ、yum を使用して gcc 等をインストールします。
-RUN yum install -y gcc gcc-c++ python3-devel && \
-    yum clean all
+# AL2023 (Python 3.12) では yum の代わりに microdnf を使用します。
+RUN microdnf install -y gcc gcc-c++ python3-devel && \
+    microdnf clean all
 
 # 3. 依存ライブラリのインストール
 COPY requirements.txt ${LAMBDA_TASK_ROOT}

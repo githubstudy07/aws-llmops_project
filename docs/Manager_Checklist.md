@@ -159,7 +159,9 @@
     Response: AWS LLMOpsの大きなメリットの一つは、"大規模なモデルのトレーニング...できること"ズラ。... これにより、開発者さんは、より迅速にモデルをトレーニングして、結果を出しやすくなるんですズラ。
     ```
 
----
-
-## 📝 監督メモ・特記事項
+*   **Phase 8-2**: Git Push Log (AL2023 移行)
+    ```text
+    To https://github.com/githubstudy07/aws-llmops_project.git
+       61f8f9a..4303130  main -> main
+    ```
 (ステークホルダーへの報告時に必要な補足事項などをここに追記してください)
