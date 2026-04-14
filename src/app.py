@@ -227,18 +227,13 @@ def lambda_handler(event, context):
         # トレースIDの取得
         trace_id = getattr(handler, "last_trace_id", None) if handler else None
 
-        # 診断サフィックス
-        conn_type = "Real" if handler else "Mock"
-        suffix = f"\n\n[Final Diagnosis: {conn_type} | Imp_Err: {IMPORT_ERR} | Init_Err: {INIT_ERR}]"
-        
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
             "body": json.dumps({
-                "response": response_text + suffix,
+                "response": response_text,
                 "session_id": thread_id,
-                "trace_id": trace_id,
-                "debug_info": msg_metadata
+                "trace_id": trace_id
             }, ensure_ascii=False)
         }
 
