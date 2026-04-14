@@ -1,0 +1,13 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParametersByPath",
+                "ssm:GetParameter"
+            ],
+            "Resource": "arn:aws:ssm:ap-northeast-1:891377371917:parameter/handson/langfuse/*"
+        }
+    ]
+}

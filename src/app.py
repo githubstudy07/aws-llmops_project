@@ -71,21 +71,47 @@ def chatbot(state: State, config: dict = None):
         m_content = getattr(msg, "content", "") if not isinstance(msg, dict) else msg.get("content", "")
         bedrock_messages.append({"role": role, "content": [{"text": m_content}]})
 
+    # 2. システムプロンプトの取得 (Langfuse または 従来のハードコード)
+    default_system_prompt = "あなたは簡潔に回答する、親切な AI アシスタントです。"
+    system_prompt = default_system_prompt
+    prompt_tag = "fallback"
+
+    if langfuse_client:
+        try:
+            # Langfuse から対象のプロンプトを取得 (ラベル 'production' を指定)
+            # SDK により自動的にキャッシュ・バックグラウンド更新が行われるため低レイテンシ
+            langfuse_prompt = langfuse_client.get_prompt(
+                "main-chatbot-prompt", 
+                label="production", 
+                cache_ttl_seconds=300
+            )
+            system_prompt = langfuse_prompt.compile()
+            prompt_tag = f"langfuse (v{langfuse_prompt.version})"
+        except Exception as e:
+            print(f"Warning: Failed to fetch prompt from Langfuse, using default: {e}")
+
     # [Option A] コスト管理 & トレーシング
     if langfuse_client:
         try:
+            # システムプロンプトも含めた入力データを構築（UIでの観測性向上のため）
+            input_data = {
+                "system": system_prompt,
+                "messages": bedrock_messages
+            }
+
             # コンテキストマネージャーにより自動で親子関係と属性が維持される
             with langfuse_client.start_as_current_observation(
                 as_type="generation",
                 name="bedrock-generation",
                 model=MODEL_ID,
-                input=bedrock_messages,
-                model_parameters={"temperature": 0.7, "maxTokens": 300}
+                input=input_data,
+                model_parameters={"temperature": 0.7, "maxTokens": 300},
+                metadata={"prompt_source": prompt_tag}
             ) as generation:
                 response = client.converse(
                     modelId=MODEL_ID,
                     messages=bedrock_messages,
-                    system=[{"text": "あなたは簡潔に回答する、親切な AI アシスタントです。"}],
+                    system=[{"text": system_prompt}],
                     inferenceConfig={"maxTokens": 300, "temperature": 0.7}
                 )
                 usage = response.get("usage", {})
@@ -104,11 +130,11 @@ def chatbot(state: State, config: dict = None):
         except Exception as e:
             print(f"Warning: Langfuse tracking failed, but continuing: {e}")
 
-    # フォールバック (Langfuse 不在時)
+    # フォールバック (Langfuse 不在時または例外発生時)
     response = client.converse(
         modelId=MODEL_ID,
         messages=bedrock_messages,
-        system=[{"text": "あなたは簡潔に回答する、親切な AI アシスタントです。"}],
+        system=[{"text": system_prompt}],
         inferenceConfig={"maxTokens": 300, "temperature": 0.7}
     )
     return {"messages": [{"role": "assistant", "content": response["output"]["message"]["content"][0]["text"]}]}
