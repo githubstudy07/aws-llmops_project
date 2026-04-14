@@ -1,16 +1,21 @@
 import json
+import os
+import sys
 import pytest
 from unittest.mock import MagicMock, patch
 
+# src ディレクトリを sys.path に追加して、src. 抜きでインポート可能にする
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
+
 @pytest.fixture
 def env_setup():
-    import os
     os.environ["AWS_REGION"] = "ap-northeast-1"
 
 def test_lambda_handler_crew_success(env_setup):
     """CrewAI のハンドラーが正常に応答を返すかのテスト（Mock）"""
-    import src.app_crew # 明示的なインポートにより属性エラーを回避
-    with patch("src.app_crew.marketing_crew") as mock_crew:
+    # app_crew を直接インポート（src. 不要）
+    import app_crew
+    with patch("app_crew.marketing_crew") as mock_crew:
         # モックの戻り値設定
         mock_result = MagicMock()
         mock_result.__str__.return_value = "Test Result Copy"
@@ -20,8 +25,7 @@ def test_lambda_handler_crew_success(env_setup):
             "body": json.dumps({"target_product": "テスト商品"})
         }
         
-        from src.app_crew import lambda_handler
-        response = lambda_handler(event, None)
+        response = app_crew.lambda_handler(event, None)
         
         assert response["statusCode"] == 200
         body = json.loads(response["body"])

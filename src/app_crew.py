@@ -1,6 +1,11 @@
 import json
 import os
-from crew_marketing import marketing_crew
+
+try:
+    from crew_marketing import marketing_crew
+except ImportError:
+    # 評価環境やローカル実行（src ディレクトリが存在する場合）のインポートパス
+    from src.crew_marketing import marketing_crew
 
 def lambda_handler(event, context):
     """
@@ -17,7 +22,6 @@ def lambda_handler(event, context):
         target_product = params.get("target_product", "AI搭載のスマート水筒")
 
         # 2. CrewAI の実行
-        # inputs を辞書で渡し、エージェントがタスクを遂行します
         print(f"Starting CrewAI for product: {target_product}")
         result = marketing_crew.kickoff(inputs={"target_product": target_product})
 
