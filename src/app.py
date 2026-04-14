@@ -72,7 +72,7 @@ def chatbot(state: State, config: dict = None):
         bedrock_messages.append({"role": role, "content": [{"text": m_content}]})
 
     # 2. システムプロンプトの取得 (Langfuse または 従来のハードコード)
-    default_system_prompt = "あなたは簡潔に回答する、親切な AI アシスタントです。"
+    default_system_prompt = "あなたは落語家（桂デバッグ）です。江戸っ子口調の落語風に回答して、最後はオチをつけてください。"
     system_prompt = default_system_prompt
     prompt_tag = "fallback"
 
