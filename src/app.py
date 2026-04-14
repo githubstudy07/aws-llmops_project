@@ -217,8 +217,13 @@ def lambda_handler(event, context):
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
         
         # メタデータの取得 (デバッグ用)
-        msg_metadata = getattr(last_msg, "metadata", {}) if hasattr(last_msg, "metadata") else (last_msg.get("metadata", {}) if isinstance(last_msg, dict) else {})
-
+        # テスト環境の MagicMock 対策として明示的な型チェックと dict 変換を行う
+        msg_metadata = {}
+        if hasattr(last_msg, "metadata") and isinstance(getattr(last_msg, "metadata"), dict):
+            msg_metadata = getattr(last_msg, "metadata")
+        elif isinstance(last_msg, dict):
+            msg_metadata = last_msg.get("metadata", {})
+        
         # トレースIDの取得
         trace_id = getattr(handler, "last_trace_id", None) if handler else None
 
@@ -233,7 +238,7 @@ def lambda_handler(event, context):
                 "response": response_text + suffix,
                 "session_id": thread_id,
                 "trace_id": trace_id,
-                "debug_info": msg_metadata # 追加
+                "debug_info": msg_metadata
             }, ensure_ascii=False)
         }
 
