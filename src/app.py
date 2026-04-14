@@ -96,7 +96,7 @@ def chatbot(state: State, config: dict = None):
             # 理由: Langfuse のラベルはケースセンシティブであり、画面上の表示に合わせるため
             langfuse_prompt = langfuse_client.get_prompt(
                 "main-chatbot-prompt", 
-                label="Production", 
+                label="production", 
                 cache_ttl_seconds=0  # テストのため一時的にキャッシュ無効化
             )
             system_prompt = langfuse_prompt.compile()
