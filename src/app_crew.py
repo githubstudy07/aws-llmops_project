@@ -1,15 +1,14 @@
 import json
 import os
-from crew_marketing import create_marketing_crew
-
+import sys
 
 def lambda_handler(event, context):
-    """
-    CrewAI 実行用の Lambda ハンドラー。
-    Crew の初期化をこの関数内で行うことで、import 時の LLM 接続を回避します。
-    """
     try:
-        # 1. 入力の取得 (API Gateway または直接呼び出し)
+        # Move imports inside to catch errors
+        print(f"Python version: {sys.version}")
+        from crew_marketing import create_marketing_crew
+        
+        # 1. 入力の取得
         body = event.get("body", "{}")
         if isinstance(body, str):
             params = json.loads(body)

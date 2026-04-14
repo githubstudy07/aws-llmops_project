@@ -1,0 +1,7 @@
+{
+    "body": "{\"message\": \"AWS LLMOpsのメリットを一つ教えて、語尾に注目して答えて。\", \"session_id\": \"test-session-local\"}",
+    "httpMethod": "POST",
+    "headers": {
+        "Content-Type": "application/json"
+    }
+}
