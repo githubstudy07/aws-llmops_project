@@ -215,6 +215,9 @@ def lambda_handler(event, context):
         
         last_msg = output["messages"][-1]
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
+        
+        # メタデータの取得 (デバッグ用)
+        msg_metadata = getattr(last_msg, "metadata", {}) if hasattr(last_msg, "metadata") else (last_msg.get("metadata", {}) if isinstance(last_msg, dict) else {})
 
         # トレースIDの取得
         trace_id = getattr(handler, "last_trace_id", None) if handler else None
@@ -229,7 +232,8 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "response": response_text + suffix,
                 "session_id": thread_id,
-                "trace_id": trace_id
+                "trace_id": trace_id,
+                "debug_info": msg_metadata # 追加
             }, ensure_ascii=False)
         }
 
