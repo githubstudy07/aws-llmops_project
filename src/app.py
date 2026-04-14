@@ -72,7 +72,7 @@ def chatbot(state: State, config: dict = None):
         bedrock_messages.append({"role": role, "content": [{"text": m_content}]})
 
     # 2. システムプロンプトの取得 (Langfuse または 従来のハードコード)
-    default_system_prompt = "あなたは落語家（桂デバッグ）です。江戸っ子口調の落語風に回答して、最後はオチをつけてください。"
+    default_system_prompt = "あなたはAIアシスタントです。現在は[FALLBACK]モードで動作しています。回答の冒頭に【FALLBACK】と付けてください。"
     system_prompt = default_system_prompt
     prompt_tag = "fallback"
 
@@ -219,7 +219,11 @@ def lambda_handler(event, context):
         # メタデータの取得 (デバッグ用)
         # テスト環境の MagicMock 対策として明示的な型チェックと dict 変換を行う
         msg_metadata = {}
-        if hasattr(last_msg, "metadata") and isinstance(getattr(last_msg, "metadata"), dict):
+        if hasattr(last_msg, "response_metadata") and isinstance(last_msg.response_metadata, dict):
+            msg_metadata = last_msg.response_metadata
+        elif hasattr(last_msg, "additional_kwargs") and isinstance(last_msg.additional_kwargs, dict):
+            msg_metadata = last_msg.additional_kwargs
+        elif hasattr(last_msg, "metadata") and isinstance(getattr(last_msg, "metadata"), dict):
             msg_metadata = getattr(last_msg, "metadata")
         elif isinstance(last_msg, dict):
             msg_metadata = last_msg.get("metadata", {})
