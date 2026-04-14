@@ -97,8 +97,9 @@ def chatbot(state: State, config: dict = None):
             system_prompt = langfuse_prompt.compile()
             prompt_tag = f"langfuse (v{langfuse_prompt.version})"
         except Exception as e:
-            print(f"Warning: Failed to fetch prompt from Langfuse, using default: {e}")
-            prompt_tag = f"fallback (error: {str(e)[:50]})"
+            msg = str(e)
+            print(f"Warning: Failed to fetch prompt from Langfuse, using default: {msg}")
+            prompt_tag = f"fallback (err: {msg[:120]})"
 
     # [Option A] コスト管理 & トレーシング
     if langfuse_client:
