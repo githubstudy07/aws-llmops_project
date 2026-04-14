@@ -6,6 +6,5 @@ python-dotenv
 langchain
 langfuse>=2.57.0
 crewai
-crewai-tools
 langchain-aws
 openinference-instrumentation-crewai
