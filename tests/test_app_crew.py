@@ -9,9 +9,7 @@ def env_setup():
 
 def test_lambda_handler_crew_success(env_setup):
     """CrewAI のハンドラーが正常に応答を返すかのテスト（Mock）"""
-    # src.crew_marketing.marketing_crew をパッチ
-    # 注意: import 時に crew が作られるため、モジュールごとパッチするか、
-    # kickoff メソッドをパッチします。
+    import src.app_crew # 明示的なインポートにより属性エラーを回避
     with patch("src.app_crew.marketing_crew") as mock_crew:
         # モックの戻り値設定
         mock_result = MagicMock()

@@ -30,7 +30,7 @@ jobs:
           pip install pytest
       - name: Run tests
         run: |
-          export PYTHONPATH=$PYTHONPATH:.
+          export PYTHONPATH=$PYTHONPATH:.:src
           pytest tests/
 
   deploy:
