@@ -2,12 +2,30 @@ import json
 import os
 import sys
 
+# グローバルインポートのエラーを捕捉するための仕組み
+try:
+    from crew_marketing import create_marketing_crew
+    _IMPORT_ERROR = None
+except Exception as e:
+    _IMPORT_ERROR = str(e)
+
 def lambda_handler(event, context):
+    """
+    CrewAI 実行用の Lambda ハンドラー。
+    """
+    # インポート時エラーのチェック
+    if _IMPORT_ERROR:
+        return {
+            "statusCode": 500,
+            "body": json.dumps({
+                "status": "error",
+                "message": f"Initialization Error (Import): {_IMPORT_ERROR}",
+                "python_path": sys.path,
+                "python_version": sys.version
+            }, ensure_ascii=False)
+        }
+
     try:
-        # Move imports inside to catch errors
-        print(f"Python version: {sys.version}")
-        from crew_marketing import create_marketing_crew
-        
         # 1. 入力の取得
         body = event.get("body", "{}")
         if isinstance(body, str):
