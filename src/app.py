@@ -78,17 +78,18 @@ def chatbot(state: State, config: dict = None):
 
     if langfuse_client:
         try:
-            # Langfuse から対象のプロンプトを取得 (ラベル 'production' を指定)
-            # SDK により自動的にキャッシュ・バックグラウンド更新が行われるため低レイテンシ
+            # Langfuse から対象のプロンプトを取得 (ラベル 'Production' を指定)
+            # 理由: Langfuse のラベルはケースセンシティブであり、画面上の表示に合わせるため
             langfuse_prompt = langfuse_client.get_prompt(
                 "main-chatbot-prompt", 
-                label="production", 
-                cache_ttl_seconds=300
+                label="Production", 
+                cache_ttl_seconds=0  # テストのため一時的にキャッシュ無効化
             )
             system_prompt = langfuse_prompt.compile()
             prompt_tag = f"langfuse (v{langfuse_prompt.version})"
         except Exception as e:
             print(f"Warning: Failed to fetch prompt from Langfuse, using default: {e}")
+            prompt_tag = f"fallback (error: {str(e)[:50]})"
 
     # [Option A] コスト管理 & トレーシング
     if langfuse_client:
@@ -126,7 +127,7 @@ def chatbot(state: State, config: dict = None):
                         "total_tokens": usage.get("totalTokens", 0)
                     }
                 )
-                return {"messages": [{"role": "assistant", "content": output_text}]}
+                return {"messages": [{"role": "assistant", "content": output_text, "metadata": {"prompt_source": prompt_tag}}]}
         except Exception as e:
             print(f"Warning: Langfuse tracking failed, but continuing: {e}")
 
@@ -137,7 +138,7 @@ def chatbot(state: State, config: dict = None):
         system=[{"text": system_prompt}],
         inferenceConfig={"maxTokens": 300, "temperature": 0.7}
     )
-    return {"messages": [{"role": "assistant", "content": response["output"]["message"]["content"][0]["text"]}]}
+    return {"messages": [{"role": "assistant", "content": response["output"]["message"]["content"][0]["text"], "metadata": {"prompt_source": prompt_tag}}]}
 
 # 3. グラフの構築
 workflow = StateGraph(State)
