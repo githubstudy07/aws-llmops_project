@@ -139,6 +139,14 @@
       "session_id": "dify-session-001",
       "user_id": "user-123"
     }
+*   **Phase 6 No. 7**: プロンプト管理（`production` ラベル）による動的反映の検証結果
+    ```bash
+    > uv run python tests/remote_test.py
+    Testing URL: https://rxajg598kk.execute-api.ap-northeast-1.amazonaws.com/Prod/chat
+    Status Code: 200
+    Prompt Source: {'prompt_tag': 'langfuse (v2)', 'has_client': True}
+    Trace ID: 71eddb6da8c23a6115b3676a2f15f51c
+    Response: AWS LLMOpsの大きなメリットの一つは、"大規模なモデルのトレーニング...できること"ズラ。... これにより、開発者さんは、より迅速にモデルをトレーニングして、結果を出しやすくなるんですズラ。
     ```
 
 ---
