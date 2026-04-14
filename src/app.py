@@ -233,7 +233,8 @@ def lambda_handler(event, context):
             "body": json.dumps({
                 "response": response_text,
                 "session_id": thread_id,
-                "trace_id": trace_id
+                "trace_id": trace_id,
+                "prompt_source": msg_metadata.get("prompt_source", "unknown")
             }, ensure_ascii=False)
         }
 
