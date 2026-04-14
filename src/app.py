@@ -53,8 +53,17 @@ if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
     os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_CONF["secret_key"]
     os.environ["LANGFUSE_HOST"] = LANGFUSE_CONF["host"]
 
-# グローバルクライアントの取得
-langfuse_client = get_client() if get_client else None
+# 5. クライアントの初期化
+langfuse_client = None
+if LANGFUSE_CONF and get_client:
+    try:
+        langfuse_client = get_client(
+            public_key=LANGFUSE_CONF["public_key"],
+            secret_key=LANGFUSE_CONF["secret_key"],
+            host=LANGFUSE_CONF["host"]
+        )
+    except Exception as e:
+        print(f"Error: Failed to initialize Langfuse client: {e}")
 
 # 1. State (状態) の定義
 class State(TypedDict):
@@ -216,28 +225,18 @@ def lambda_handler(event, context):
         last_msg = output["messages"][-1]
         response_text = last_msg.content if hasattr(last_msg, "content") else last_msg.get("content", str(last_msg))
 
-        # メタデータの取得 (デバッグ用)
-        msg_metadata = {}
-        # 1. 直接的な属性チェック (AIMessage 等)
-        if hasattr(last_msg, "response_metadata") and isinstance(last_msg.response_metadata, dict):
-            msg_metadata.update(last_msg.response_metadata)
-        if hasattr(last_msg, "additional_kwargs") and isinstance(last_msg.additional_kwargs, dict):
-            msg_metadata.update(last_msg.additional_kwargs)
-        if hasattr(last_msg, "metadata") and isinstance(getattr(last_msg, "metadata"), dict):
-            msg_metadata.update(getattr(last_msg, "metadata"))
-        
-        # 2. 辞書形式の場合 (Mock時や直接返却時)
+        # 3. メタデータの最終抽出
+        # chatbot ノードが返却した {"messages": [{"metadata": {...}}]} を確実に拾う
+        prompt_source_info = "unknown"
         if isinstance(last_msg, dict):
-            msg_metadata.update(last_msg.get("metadata", {}))
-            msg_metadata.update({k: v for k, v in last_msg.items() if k != "content"})
-
-        # ネストされたメタデータの平坦化取得
-        final_prompt_source = msg_metadata.get("prompt_source")
-        if not final_prompt_source and isinstance(msg_metadata.get("metadata"), dict):
-            final_prompt_source = msg_metadata.get("metadata").get("prompt_source")
-        
-        # トレースIDの取得
-        trace_id = getattr(handler, "last_trace_id", None) if handler else None
+            prompt_source_info = last_msg.get("metadata", {}).get("prompt_source", "unknown_nested_metadata")
+            if prompt_source_info == "unknown_nested_metadata":
+                prompt_source_info = last_msg.get("prompt_source", "unknown_dict_root")
+        elif hasattr(last_msg, "response_metadata"):
+            prompt_source_info = last_msg.response_metadata.get("prompt_source", "unknown_response_metadata")
+        elif hasattr(last_msg, "additional_kwargs"):
+            prompt_source_info = last_msg.additional_kwargs.get("metadata", {}).get("prompt_source", 
+                                  last_msg.additional_kwargs.get("prompt_source", "unknown_additional_kwargs"))
 
         return {
             "statusCode": 200,
@@ -246,7 +245,7 @@ def lambda_handler(event, context):
                 "response": response_text,
                 "session_id": thread_id,
                 "trace_id": trace_id,
-                "prompt_source": final_prompt_source or "unknown_extraction_failure"
+                "prompt_source": prompt_source_info
             }, ensure_ascii=False)
         }
 
