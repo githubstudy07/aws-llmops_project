@@ -99,7 +99,8 @@ def chatbot(state: State, config: dict = None):
         except Exception as e:
             msg = str(e)
             print(f"Warning: Failed to fetch prompt from Langfuse, using default: {msg}")
-            prompt_tag = f"fallback (err: {msg[:120]})"
+            # エラーの詳細をメタデータに含める (診断用)
+            prompt_tag = f"fallback (err: {msg[:500]})"
 
     # [Option A] コスト管理 & トレーシング
     if langfuse_client:
@@ -233,9 +234,9 @@ def lambda_handler(event, context):
             prompt_source_info = last_msg.get("metadata", {}).get("prompt_source", "unknown_nested_metadata")
             if prompt_source_info == "unknown_nested_metadata":
                 prompt_source_info = last_msg.get("prompt_source", "unknown_dict_root")
-        elif hasattr(last_msg, "response_metadata"):
+        elif hasattr(last_msg, "response_metadata") and isinstance(last_msg.response_metadata, dict):
             prompt_source_info = last_msg.response_metadata.get("prompt_source", "unknown_response_metadata")
-        elif hasattr(last_msg, "additional_kwargs"):
+        elif hasattr(last_msg, "additional_kwargs") and isinstance(last_msg.additional_kwargs, dict):
             prompt_source_info = last_msg.additional_kwargs.get("metadata", {}).get("prompt_source", 
                                   last_msg.additional_kwargs.get("prompt_source", "unknown_additional_kwargs"))
 

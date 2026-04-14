@@ -16,7 +16,9 @@ def test_lambda_handler_chat_route(env_setup):
          patch("src.app.langfuse_client") as mock_lf:
         
         # モックの設定
-        mock_invoke.return_value = {"messages": [MagicMock(content="Hello assistant")]}
+        mock_msg = MagicMock(content="Hello assistant")
+        mock_msg.additional_kwargs = {"prompt_source": "mock_source"}
+        mock_invoke.return_value = {"messages": [mock_msg]}
         mock_handler = MagicMock()
         mock_cb_class.return_value = mock_handler
         # CallbackHandler が正常にインスタンス化された体にする
