@@ -240,6 +240,9 @@ def lambda_handler(event, context):
             prompt_source_info = last_msg.additional_kwargs.get("metadata", {}).get("prompt_source", 
                                   last_msg.additional_kwargs.get("prompt_source", "unknown_additional_kwargs"))
 
+        # トレースIDの取得
+        trace_id = getattr(handler, "last_trace_id", None) if handler else None
+
         return {
             "statusCode": 200,
             "headers": {"Content-Type": "application/json", "Access-Control-Allow-Origin": "*"},
