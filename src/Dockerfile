@@ -1,5 +1,5 @@
-# 1. AWS Lambda 用の Python 3.11 公式ベースイメージを使用
-FROM public.ecr.aws/lambda/python:3.11
+# 1. AWS Lambda 用の Python 3.12 公式ベースイメージを使用
+FROM public.ecr.aws/lambda/python:3.12
 
 # 2. ビルドツールのインストール
 # イメージの OS バージョンに合わせ、yum を使用して gcc 等をインストールします。

@@ -3,17 +3,19 @@
 ## 🎯 [TRUSTED_STATE] 現在の検証済み状況
 > **AIへの警告**: 以下の情報は 2026-04-08 時点での最終正解です。**再チェック（list-tables, invokeテスト等）は不要**です。これを真実として即座に作業を開始してください。
 
-- **現在のフェーズ**: Phase 7 (CrewAI | 設計開始)
+- **現在のフェーズ**: Phase 8 (CrewAI | デプロイ環境調整)
 - **検証済みリソース (ap-northeast-1)**:
   - [x] API Gateway: https://rxajg598kk.execute-api.ap-northeast-1.amazonaws.com/Prod/chat
   - [x] Langfuse Prompt: `Production` ラベルによる動的取得・反映に成功
+  - [x] GitHub Actions: テスト自動化フェーズ通過
 - **現在の状況**:
-  - **Phase 6 (Langfuse) 完了**: 基本的なトレーシング、コスト算出、プロンプト管理の LLMOps サイクルが完成。
-  - **Phase 7 (CrewAI) 開始**: 広告キャッチコピー作成支援（リサーチ＆ライティング）を題材とし、自律型マルチエージェントへの移行を開始。
+  - **Phase 6 (Langfuse) 完了**: トレーシング、コスト、フィードバック、実験、プロンプト管理の全機能を実装・検証済み。
+  - **Phase 7 (CrewAI) 設計完了**: リサーチ＆ライティングのマルチエージェントロジック完成。
+  - **Phase 8 (Deployment) 進行中**: Python 3.12 (Amazon Linux 2023) への移行により GCC バージョン問題を解決中。
 - **次回のステップ**:
-  - **Phase 7-1**: 初学者向けの「広告キャッチコピー作成」エージェント設計と、Langfuse によるコスト最小化（max_iter 制限）の実装。
+  - **Phase 8-2**: Dockerfile の Python バージョンを 3.12 にアップグレードし、SAM デプロイを実行する。
 - **⚠️ 厳重注意 (Security & Billing)**:
-  - **API キーの取り扱い**: API キーは「家や金庫の鍵」と同じです。漏洩すると多額の課金が発生します。絶対にドキュメントやコード内に生の値を残さないでください。
+  - **API キーの取り扱い**: 厳重管理。
 
 ## 🗺️ ロードマップと現在地
 | フェーズ | 内容 | ステータス |
@@ -23,6 +25,8 @@
 | **Phase 4-2** | Dify 外部ツール連携テスト | **✅ 完了** |
 | **Phase 5** | GitHub Actions (CI/CD) | **✅ 完了** |
 | **Phase 6** | Langfuse による品質監視 | **✅ 完了** |
+| **Phase 7** | CrewAI マルチエージェントへの移行 | **✅ 設計完了** |
+| **Phase 8** | コンテナデプロイと環境最適化 | **[/] 進行中** |
 
 ## 🤖 [AI_DIRECTIVES] AIエージェントへの動作命令
 1. **信頼の原則**: [TRUSTED_STATE] を真実とし、API Endpoint や DynamoDB の再確認を行わないこと。
@@ -51,6 +55,33 @@
 11. **【厳守】デバッグ泥沼化の防止**: 
     - 実装を開始する前に、必ず [AI実装の鉄則_デバッグ泥沼回避ガイド.md](file:///c:/Users/naoji/Documents/projects/aws-llmops_project/docs/AI実装の鉄則_デバッグ泥沼回避ガイド.md) を読み込み、その「鉄則」を遵守することを宣言せよ。
     - 特に、エラー解決に2回失敗した場合は、独力での解決を中止し、必ずWeb検索機能を使用して最新の公式ドキュメントを確認すること。
+12. **【厳禁】既存データの「全上書き」と「省略」の禁止**: 
+    - AIは既存の管理ファイル（Progress_log.md, Manager_Checklist.md 等）を更新する際、絶対に `write_to_file` (Overwrite: true) を使用してはならない。
+    - 必ず `view_file` で現状を把握し、`replace_file_content` を用いて必要な箇所の「部分置換」のみを行うこと。
+    - **履歴情報の勝手な要約や `(...省略...)` の記載は、管理情報の破壊とみなし厳禁とする。** 常に完全な状態の維持を最優先せよ。
+
+---
+
+### セッション 25 (2026-04-14)
+- **実施内容**: Phase 8-2: GCC バージョン不足（NumPyビルドエラー）の解消。案A（Python 3.12 移行）を採用。
+- **成果物**: 
+    - docs/ユースケース_シナリオ_理由.md: Phase 8-2 要件追記。
+    - docs/Manager_Checklist.md: Phase 8-2 管理項目追加。
+- **次への引継ぎ**: Dockerfile および template.yaml の Python バージョンを 3.12 に統一し、デプロイを実行する。
+
+---
+
+### セッション 24 (2026-04-14)
+- **実施内容**: CrewAI への技術スタック移行とコンテナデプロイの実装。
+- **成果物**: 
+    - src/app_crew.py / src/crew_marketing.py: 実装完了。
+    - tests/test_app_crew.py: ユニットテスト（モック）通過。
+    - template.yaml: コンテナイメージ形式への定義変更。
+- **課題**: 
+    - Amazon Linux 2 (Python 3.11) の GCC バージョン (7.3.1) が `numpy` の要求 (9.3以上) を満たせずビルド失敗。
+- **次回への引継ぎ**: 
+    - [handover_phase08_build_error.md](file:///C:/Users/naoji/.gemini/antigravity/brain/e9701f50-c4cc-4e37-ab4d-bbe52661ccc5/handover_phase08_build_error.md) に詳細と解決策を記録済み。
+    - 次回は Python 3.12 (AL2023) への移行を検討してください。
 
 ---
 
@@ -60,7 +91,7 @@
     - docs/ユースケース_シナリオ_理由.md: Phase 7-1 の要件定義を追記。
     - docs/Manager_Checklist.md: Phase 7 の管理項目を追加（降順）。
 - **次への引継ぎ**: 
-    - Phase 7-1: Tool Calling / Web Search 連携のシナリオ合意を得た後、LangGraph の構成変更（Tool用ノードの追加）に着手する。
+    - Phase 7-1: 広告キャッチコピー作成支援。リサーチ＆ライティングによる自律型マルチエージェントへの移行。
 
 ---
 
