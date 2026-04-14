@@ -1,38 +1,12 @@
-# 1. SQLite3 のバージョン問題を解決するために pysqlite3 を優先的にロード
-try:
-    import pysqlite3
-    import sys
-    sys.modules["sqlite3"] = pysqlite3
-except ImportError:
-    pass
-
 import json
 import os
 import sys
-
-# グローバルインポートのエラーを捕捉するための仕組み
-try:
-    from crew_marketing import create_marketing_crew
-    _IMPORT_ERROR = None
-except Exception as e:
-    _IMPORT_ERROR = str(e)
+import sqlite3
 
 def lambda_handler(event, context):
     """
     CrewAI 実行用の Lambda ハンドラー。
     """
-    # インポート時エラーのチェック
-    if _IMPORT_ERROR:
-        return {
-            "statusCode": 500,
-            "body": json.dumps({
-                "status": "error",
-                "message": f"Initialization Error (Import): {_IMPORT_ERROR}",
-                "python_path": sys.path,
-                "python_version": sys.version
-            }, ensure_ascii=False)
-        }
-
     try:
         # 1. 入力の取得
         body = event.get("body", "{}")
@@ -41,9 +15,26 @@ def lambda_handler(event, context):
         else:
             params = body or {}
 
-        target_product = params.get("target_product", "AI搭載のスマート水筒")
+        # 診断モード (プラットフォームの状態を確認)
+        if params.get("diagnostic"):
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"
+                },
+                "body": json.dumps({
+                    "status": "diagnostic",
+                    "sqlite_version": sqlite3.sqlite_version,
+                    "python_version": sys.version,
+                    "env": {k: v for k, v in os.environ.items() if "AWS" in k or "PATH" in k}
+                }, ensure_ascii=False)
+            }
 
         # 2. CrewAI の初期化と実行
+        from crew_marketing import create_marketing_crew
+        target_product = params.get("target_product", "AI搭載のスマート水筒")
+        
         # ★ インポート済みのファクトリ関数から Crew を作成
         crew = create_marketing_crew()
 
