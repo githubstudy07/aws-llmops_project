@@ -95,9 +95,8 @@ def chatbot(state: State, config: dict = None):
             # Langfuse から対象のプロンプトを取得 (ラベル 'Production' を指定)
             # 理由: Langfuse のラベルはケースセンシティブであり、画面上の表示に合わせるため
             langfuse_prompt = langfuse_client.get_prompt(
-                "main-chatbot-prompt", 
-                label="production", 
-                cache_ttl_seconds=0  # テストのため一時的にキャッシュ無効化
+                "main-chatbot-prompt",
+                cache_ttl_seconds=0  # [診断テスト] label引数を外して最新版(Latest)の取得を試みる
             )
             system_prompt = langfuse_prompt.compile()
             prompt_tag = f"langfuse (v{langfuse_prompt.version})"
