@@ -38,15 +38,15 @@ def get_langfuse_config():
 
 LANGFUSE_CONF = get_langfuse_config()
 
-# SDK インポートと環境変数セット
+# SDK インポート
 IMPORT_ERR = "None"
 try:
     from langfuse.langchain import CallbackHandler
-    from langfuse import get_client
+    from langfuse import Langfuse
 except ImportError as e:
     IMPORT_ERR = str(e)
     CallbackHandler = None
-    get_client = None
+    Langfuse = None
 
 if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
     os.environ["LANGFUSE_PUBLIC_KEY"] = LANGFUSE_CONF["public_key"]
@@ -56,9 +56,10 @@ if LANGFUSE_CONF and LANGFUSE_CONF.get("secret_key"):
 # 5. クライアントの初期化
 langfuse_client = None
 LF_INIT_ERR = "None"
-if LANGFUSE_CONF and get_client:
+if LANGFUSE_CONF and Langfuse:
     try:
-        langfuse_client = get_client(
+        # get_client() ではなく Langfuse クラスをインスタンス化する（推奨方法）
+        langfuse_client = Langfuse(
             public_key=LANGFUSE_CONF.get("public_key"),
             secret_key=LANGFUSE_CONF.get("secret_key"),
             host=LANGFUSE_CONF.get("host")
@@ -67,7 +68,7 @@ if LANGFUSE_CONF and get_client:
         LF_INIT_ERR = f"ClientInitError: {str(e)}"
         print(f"Error: Failed to initialize Langfuse client: {e}")
 else:
-    LF_INIT_ERR = f"ConfOrImportError: Conf={bool(LANGFUSE_CONF)}, Import={bool(get_client)}"
+    LF_INIT_ERR = f"ConfOrImportError: Conf={bool(LANGFUSE_CONF)}, Lib={bool(Langfuse)}"
 
 # 1. State (状態) の定義
 class State(TypedDict):
