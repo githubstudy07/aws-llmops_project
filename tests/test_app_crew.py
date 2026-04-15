@@ -16,9 +16,8 @@ def test_lambda_handler_diagnostic_success():
     }
 
     response = app_crew.lambda_handler(event, None)
-
+    
     assert response["statusCode"] == 200
     body = json.loads(response["body"])
-    assert body["status"] == "diagnostic_mode"
-    assert "diagnostics" in body
-    assert "python_version" in body
+    assert "runtime" in body
+    assert body["runtime"] == "python:3.12 (AL2023)"
