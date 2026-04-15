@@ -1,9 +1,9 @@
-# Minimal requirements for infrastructure health check (Phase 8-2.1)
 boto3>=1.35.81
 botocore>=1.35.81
 python-dotenv
-# crewai, numpy, etc. are temporarily removed to isolate build/runtime issues.
-# crewai
-# langchain
-# langfuse
-# langchain-aws
+crewai==0.28.8
+langchain-aws
+langfuse
+openinference-instrumentation-crewai
+opentelemetry-api
+opentelemetry-sdk
