@@ -126,4 +126,27 @@ jobs:
             --image-repository ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --parameter-overrides Environment=production
+            --parameter-overrides Environment=production \
+            --debug 2>&1 | tee sam_deploy.log
+        continue-on-error: true
+
+      - name: Show CloudFormation events on failure
+        if: always()
+        run: |
+          echo "=== Recent CloudFormation Events ==="
+          aws cloudformation describe-stack-events \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --max-items 20 \
+            --output table || true
+          
+          echo "=== Failed ChangeSet Details ==="
+          CS=$(aws cloudformation list-change-sets --stack-name ${{ env.SAM_STACK_NAME }} --region ${{ env.AWS_REGION }} --query "Summaries[?Status=='FAILED'] | [0].ChangeSetId" --output text)
+          if [ "$CS" != "None" ]; then
+            aws cloudformation describe-change-set --stack-name ${{ env.SAM_STACK_NAME }} --change-set-name $CS --region ${{ env.AWS_REGION }}
+          fi
+          
+          # 以前のデプロイがエラーで終わっていた場合は後続を失敗させる
+          if grep -q "Error:" sam_deploy.log; then
+            exit 1
+          fi
