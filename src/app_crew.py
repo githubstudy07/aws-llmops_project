@@ -36,6 +36,7 @@ def lambda_handler(event, context):
     """
     CrewAI (Marketing) を実行するメインハンドラー
     """
+    print("Lambda started")
     
     # 3. 入力データの取得
     body_data = {}
@@ -47,11 +48,17 @@ def lambda_handler(event, context):
     
     # Dify等からの入力を想定したキー (message) または直接指定 (target_product)
     target_product = body_data.get("message") or body_data.get("target_product") or "AI搭載の最新型ロボット掃除機"
+    print(f"Target product: {target_product}")
     
     try:
         # 4. Crew の作成と実行
+        print("Creating marketing crew...")
         crew = create_marketing_crew()
+        print("Crew created. Starting kickoff...")
+        
+        # タイムアウト対策として、実行開始をログ
         result = crew.kickoff(inputs={'target_product': target_product})
+        print("Kickoff finished successfully")
         
         # 5. レスポンスの返却
         return {
