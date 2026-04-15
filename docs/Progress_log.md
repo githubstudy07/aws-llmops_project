@@ -4,16 +4,14 @@
 > **AIへの警告**: 以下の情報は 2026-04-08 時点での最終正解です。**再チェック（list-tables, invokeテスト等）は不要**です。これを真実として即座に作業を開始してください。
 
 - **現在のフェーズ**: Phase 8 (CrewAI | デプロイ環境調整)
+- **状況**: **[BLOCK] 実行時 500 エラー解決中**
 - **検証済みリソース (ap-northeast-1)**:
   - [x] API Gateway: https://rxajg598kk.execute-api.ap-northeast-1.amazonaws.com/Prod/chat
-  - [x] Langfuse Prompt: `Production` ラベルによる動的取得・反映に成功
-  - [x] GitHub Actions: テスト自動化フェーズ通過
-- **現在の状況**:
-  - **Phase 6 (Langfuse) 完了**: トレーシング、コスト、フィードバック、実験、プロンプト管理の全機能を実装・検証済み。
-  - **Phase 7 (CrewAI) 設計完了**: リサーチ＆ライティングのマルチエージェントロジック完成。
-  - **Phase 8 (Deployment) 進行中**: Python 3.12 (Amazon Linux 2023) への移行により GCC バージョン問題を解決中。
+  - [x] GitHub Actions: コンテナデプロイパイプライン成功
+- **現在の課題**:
+  - Python 3.12 移行でビルドは成功したが、Lambda 実行時に `Internal server error` が発生。
 - **次回のステップ**:
-  - **Phase 8-2**: Dockerfile の Python バージョンを 3.12 にアップグレードし、SAM デプロイを実行する。
+  - **Phase 8-2**: ユニットテストを調整し、最小構成（Hello World）でのデプロイにより 500 エラーの切り分けを完了する。
 - **⚠️ 厳重注意 (Security & Billing)**:
   - **API キーの取り扱い**: 厳重管理。
 
@@ -59,6 +57,21 @@
     - AIは既存の管理ファイル（Progress_log.md, Manager_Checklist.md 等）を更新する際、絶対に `write_to_file` (Overwrite: true) を使用してはならない。
     - 必ず `view_file` で現状を把握し、`replace_file_content` を用いて必要な箇所の「部分置換」のみを行うこと。
     - **履歴情報の勝手な要約や `(...省略...)` の記載は、管理情報の破壊とみなし厳禁とする。** 常に完全な状態の維持を最優先せよ。
+
+---
+
+### セッション 26 (2026-04-14)
+- **実施内容**: Phase 8-2: Python 3.12 (Amazon Linux 2023) 移行による NumPy ビルド解決と、実行時 500 エラーの調査。
+- **成果物**: 
+    - src/Dockerfile: python:3.12 (AL2023) への移行完了（NumPy ビルド成功）。
+    - src/app_crew.py: 診断モード（sqlite3 バージョン確認等）の実装と、pysqlite3-binary の除去。
+- **課題**: 
+    - デプロイ後の API 呼び出しで HTTP 500 (Internal Server Error) が継続中。
+    - ユニットテスト制約により、診断コード（Hello World 等）のデプロイが一部阻害された。
+- **次回への引継ぎ**: 
+    - コンテナの起動・インポート時にクラッシュしている可能性が高い。
+    - 次回は、ユニットテスト（mock）を一時的に無効化するか調整し、Hello World レベルでのプラットフォーム生存確認から再開すること。
+    - AL2023 での numpy/crewai 依存関係のインポート可否を徹底調査すること。
 
 ---
 
