@@ -22,7 +22,6 @@ Globals:
       LogFormat: JSON
     Environment:
       Variables:
-        AWS_REGION: !Ref AWS::Region
         CHROMA_DB_PATH: /tmp/chroma_db
         CREWAI_STORAGE_DIR: /tmp/crewai_storage
         HF_HOME: /tmp/huggingface
