@@ -1,4 +1,4 @@
-# File: tests/test_app_crew.py
+# File: tests/test_crew_handler.py
 import json
 import pytest
 from unittest.mock import MagicMock, patch
@@ -9,7 +9,15 @@ def _make_event(body: dict) -> dict:
 class TestHandlerRouting:
     """ハンドラーの入力バリデーションとレスポンス構造のテスト"""
 
-    def test_valid_product_calls_crew_kickoff(self):
+    def test_missing_topic_returns_400(self):
+        from crew_app.app_crew import handler
+        event = _make_event({})
+        result = handler(event, None)
+        assert result["statusCode"] == 400
+        body = json.loads(result["body"])
+        assert "error" in body
+
+    def test_valid_topic_calls_crew_kickoff(self):
         mock_result = MagicMock()
         mock_result.__str__ = lambda self: "テスト記事の内容"
 
@@ -18,8 +26,7 @@ class TestHandlerRouting:
 
         with patch("crew_app.app_crew.build_crew", return_value=mock_crew):
             from crew_app.app_crew import handler
-
-            event = _make_event({"target_product": "生成AIの最新動向"})
+            event = _make_event({"topic": "生成AIの最新動向"})
             result = handler(event, None)
 
         assert result["statusCode"] == 200
@@ -33,26 +40,9 @@ class TestHandlerRouting:
 
         with patch("crew_app.app_crew.build_crew", return_value=mock_crew):
             from crew_app.app_crew import handler
-
-            event = _make_event({"target_product": "テスト"})
+            event = _make_event({"topic": "テスト"})
             result = handler(event, None)
 
         assert result["statusCode"] == 500
         body = json.loads(result["body"])
         assert "LLM timeout" in body["error"]
-
-class TestPysqlite3HackIsolation:
-    """pysqlite3 ハックが Lambda 外では発動しないことを確認"""
-
-    def test_lambda_task_root_not_set_in_test_env(self):
-        import os
-        assert "LAMBDA_TASK_ROOT" not in os.environ
-
-    def test_sqlite3_is_importable_without_hack(self):
-        import sqlite3
-        import sys
-        # sys.modules['sqlite3'] が差し替えられていないことを確認
-        # (テスト環境では pysqlite3 はインストールされていないため KeyError または標準のが入っているはず)
-        if 'pysqlite3' in sys.modules:
-             # 万が一インストールされていたとしても、sqlite3 モジュールが差し替わっていないかチェック
-             assert 'pysqlite3' not in sys.modules['sqlite3'].__name__

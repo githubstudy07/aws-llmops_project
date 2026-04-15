@@ -28,6 +28,7 @@ Globals:
         HF_HOME: /tmp/huggingface
         SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
         HOME: /tmp
+        SSM_PARAM_PREFIX: /handson/langfuse
 
 Resources:
   # 1. Lambda 関数の定義

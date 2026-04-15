@@ -6,10 +6,17 @@ from crew_app.agents import make_researcher, make_copywriter
 def make_research_task(researcher) -> Task:
     return Task(
         description=(
-            "1. {target_product} を利用しそうなユーザーが、日常で抱えている悩みやストレスを分析してください。\n"
-            "2. その悩みに対する解決策を象徴するキーワードを3つ抽出してください。"
+            "以下のトピックについて包括的な調査を行ってください。\n"
+            "トピック: {topic}\n\n"
+            "- 主要な事実と統計を収集する\n"
+            "- 信頼できる情報源を特定する\n"
+            "- 重要なトレンドや洞察をまとめる"
         ),
-        expected_output="ユーザーの悩み TOP3 と、解決のヒントになるキーワード 3 つのリスト。",
+        expected_output=(
+            "調査レポート（日本語）:\n"
+            "- 主要なポイントを箇条書きで 5 点以上\n"
+            "- 各ポイントの根拠となる情報を含む"
+        ),
         agent=researcher,
     )
 
@@ -17,10 +24,19 @@ def make_research_task(researcher) -> Task:
 def make_writing_task(copywriter, research_task: Task) -> Task:
     return Task(
         description=(
-            "リサーチ結果を活用して、{target_product} の魅力を伝えるキャッチコピーを3案作成してください。\n"
-            "各案には、なぜその言葉がターゲットに刺さるのかの短い解説を添えてください。"
+            "リサーチャーの調査結果を元に、以下のトピックに関する記事を執筆してください。\n"
+            "トピック: {topic}\n\n"
+            "- 読者の興味を引くタイトルと導入文\n"
+            "- 調査結果を分かりやすく構造化した本文\n"
+            "- 読者へのアクションを促す結論"
         ),
-        expected_output="3つのキャッチコピー案（各案に解説付き）。",
+        expected_output=(
+            "完成記事（日本語・Markdown 形式）:\n"
+            "- タイトル\n"
+            "- 導入 (200 字以上)\n"
+            "- 本文 (セクション 3 つ以上)\n"
+            "- 結論"
+        ),
         agent=copywriter,
         context=[research_task],
     )

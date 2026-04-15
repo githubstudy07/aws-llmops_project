@@ -83,4 +83,5 @@ jobs:
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
-            --resolve-image-repos
+            --resolve-image-repos \
+            --parameter-overrides Environment=production

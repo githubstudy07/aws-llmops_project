@@ -7,8 +7,7 @@ from crew_app.tasks import make_research_task, make_writing_task
 
 def build_crew() -> Crew:
     """
-    Crew を結成して返す。
-    storage_path 等を /tmp に向ける設定を含む。
+    Crew を構築して返す。
     """
     researcher = make_researcher()
     copywriter = make_copywriter()
@@ -21,7 +20,7 @@ def build_crew() -> Crew:
         tasks=[research_task, writing_task],
         process=Process.sequential,
         verbose=False,
-        memory=True, # /tmp へリダイレクト済みのため有効化
+        memory=True,
         embedder={
             "provider": "aws_bedrock",
             "config": {
