@@ -1,5 +1,16 @@
 import json
 import os
+import sys
+
+# [CRITICAL] Lambda の古い SQLite3 を pysqlite3-binary で差し替える
+# この処理は他のすべてのインポート（特に crewai / chromadb）より前に行う必要がある
+try:
+    import pysqlite3
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+    print("SQLite3 has been successfully swapped with pysqlite3-binary")
+except ImportError:
+    print("pysqlite3-binary not found, using standard sqlite3")
+
 import boto3
 from crew_marketing import create_marketing_crew
 
