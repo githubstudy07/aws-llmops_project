@@ -2,7 +2,6 @@ boto3>=1.35.81
 botocore>=1.35.81
 python-dotenv
 crewai>=1.0.0
-pysqlite3-binary
 langchain-aws
 langfuse
 openinference-instrumentation-crewai

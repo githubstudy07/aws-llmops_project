@@ -1,23 +1,14 @@
 import json
 import os
 import sys
-
-# [CRITICAL] Lambda の古い SQLite3 を pysqlite3-binary で差し替える
-# この処理は他のすべてのインポート（特に crewai / chromadb）より前に行う必要がある
-try:
-    import pysqlite3
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-    print("SQLite3 has been successfully swapped with pysqlite3-binary")
-except ImportError:
-    print("pysqlite3-binary not found, using standard sqlite3")
-
 import boto3
 
-# 1. 環境設定
-REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
+# [DIAGNOSTIC] すべての重いインポートをハンドラー内に移動し、
+# どの段階で Runtime.Unknown が発生しているかを特定する。
 
 def get_langfuse_config():
     """SSM Parameter Store から Langfuse 設定を取得"""
+    REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
     ssm = boto3.client("ssm", region_name=REGION)
     try:
         response = ssm.get_parameters_by_path(
@@ -39,23 +30,26 @@ def lambda_handler(event, context):
     """
     CrewAI (Marketing) を実行するメインハンドラー
     """
-    print("Lambda started")
+    print("--- Lambda Handler Started ---")
     
-    # SQLite バージョン診断
+    # 1. バージョン診断 (AL2023 の標準 SQLite を確認)
     try:
         import sqlite3
-        print(f"SQLite version in handler: {sqlite3.sqlite_version}")
+        print(f"System SQLite version: {sqlite3.sqlite_version}")
     except Exception as e:
-        print(f"Diagnostic error: {e}")
+        print(f"SQLite import error: {e}")
 
-    # 2. 初期化 (環境変数のセット) - Init タイムアウトを避けるためハンドラー内で実行
-    langfuse_conf = get_langfuse_config()
-    if langfuse_conf:
-        os.environ["LANGFUSE_PUBLIC_KEY"] = langfuse_conf.get("public_key") or ""
-        os.environ["LANGFUSE_SECRET_KEY"] = langfuse_conf.get("secret_key") or ""
-        os.environ["LANGFUSE_HOST"] = langfuse_conf.get("host") or "https://cloud.langfuse.com"
-        print("Langfuse environment variables set")
-    
+    # 2. 環境設定 (SSM)
+    try:
+        langfuse_conf = get_langfuse_config()
+        if langfuse_conf:
+            os.environ["LANGFUSE_PUBLIC_KEY"] = langfuse_conf.get("public_key") or ""
+            os.environ["LANGFUSE_SECRET_KEY"] = langfuse_conf.get("secret_key") or ""
+            os.environ["LANGFUSE_HOST"] = langfuse_conf.get("host") or "https://cloud.langfuse.com"
+            print("Langfuse config fetched from SSM")
+    except Exception as e:
+        print(f"Langfuse setup error: {e}")
+
     # 3. 入力データの取得
     body_data = {}
     if "body" in event and event["body"]:
@@ -64,22 +58,20 @@ def lambda_handler(event, context):
         except:
             body_data = {"message": str(event["body"])}
     
-    # Dify等からの入力を想定したキー (message) または直接指定 (target_product)
     target_product = body_data.get("message") or body_data.get("target_product") or "AI搭載の最新型ロボット掃除機"
     print(f"Target product: {target_product}")
     
     try:
-        # 4. Crew の作成と実行
+        # 4. CrewAI 関連の遅延インポート
+        print("Importing crew_marketing...")
         from crew_marketing import create_marketing_crew
         print("Creating marketing crew...")
         crew = create_marketing_crew()
         print("Crew created. Starting kickoff...")
         
-        # タイムアウト対策として、実行開始をログ
         result = crew.kickoff(inputs={'target_product': target_product})
         print("Kickoff finished successfully")
         
-        # 5. レスポンスの返却
         return {
             "statusCode": 200,
             "headers": {
@@ -94,15 +86,15 @@ def lambda_handler(event, context):
         }
         
     except Exception as e:
-        print(f"Error during Crew execution: {str(e)}")
+        import traceback
+        error_msg = traceback.format_exc()
+        print(f"Error during Crew execution:\n{error_msg}")
         return {
             "statusCode": 500,
-            "headers": {
-                "Content-Type": "application/json"
-            },
+            "headers": { "Content-Type": "application/json" },
             "body": json.dumps({
                 "error": str(e),
-                "target_product": target_product,
+                "traceback": error_msg,
                 "status": "error"
             })
         }
