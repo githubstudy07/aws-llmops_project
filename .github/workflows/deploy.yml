@@ -113,40 +113,63 @@ jobs:
       - name: SAM Build
         run: sam build --use-container
 
-      # ----------------------------------------------------------------
-      # SAM デプロイ
-      # ----------------------------------------------------------------
+      # -------------------------------------------------------
+      # デプロイ前: 残留 Log Group のクリーンアップ
+      # -------------------------------------------------------
+      - name: Cleanup orphaned Log Groups
+        run: |
+          LOG_GROUPS=$(aws logs describe-log-groups \
+            --log-group-name-prefix "/aws/lambda/${{ env.SAM_STACK_NAME }}" \
+            --region ${{ env.AWS_REGION }} \
+            --query "logGroups[*].logGroupName" \
+            --output text)
+
+          if [ -n "$LOG_GROUPS" ]; then
+            for lg in $LOG_GROUPS; do
+              echo "Deleting orphaned log group: $lg"
+              aws logs delete-log-group \
+                --log-group-name "$lg" \
+                --region ${{ env.AWS_REGION }} || echo "Failed to delete $lg"
+            done
+          else
+            echo "No orphaned log groups found."
+          fi
+
+      # -------------------------------------------------------
+      # SAM Deploy
+      # -------------------------------------------------------
       - name: SAM Deploy
         run: |
           sam deploy \
-            --stack-name ${{ env.SAM_STACK_NAME }} \
-            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --region ${{ env.AWS_REGION }} \
-            --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
-            --image-repository ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+            --image-repository ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
+            --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --parameter-overrides Environment=production \
             --debug 2>&1 | tee sam_deploy.log
         continue-on-error: true
 
-      - name: Show CloudFormation events on failure
+      # -------------------------------------------------------
+      # 失敗時: CloudFormation イベントの詳細を出力
+      # -------------------------------------------------------
+      - name: Show CloudFormation diagnostics on failure
         if: always()
         run: |
-          echo "=== Recent CloudFormation Events ==="
-          aws cloudformation describe-stack-events \
-            --stack-name ${{ env.SAM_STACK_NAME }} \
-            --region ${{ env.AWS_REGION }} \
-            --max-items 20 \
-            --output table || true
-          
-          echo "=== Failed ChangeSet Details ==="
-          CS=$(aws cloudformation list-change-sets --stack-name ${{ env.SAM_STACK_NAME }} --region ${{ env.AWS_REGION }} --query "Summaries[?Status=='FAILED'] | [0].ChangeSetId" --output text)
-          if [ "$CS" != "None" ]; then
-            aws cloudformation describe-change-set --stack-name ${{ env.SAM_STACK_NAME }} --change-set-name $CS --region ${{ env.AWS_REGION }}
-          fi
-          
-          # 以前のデプロイがエラーで終わっていた場合は後続を失敗させる
           if grep -q "Error:" sam_deploy.log; then
+            echo "=== CloudFormation Events (Recent) ==="
+            aws cloudformation describe-stack-events \
+              --stack-name ${{ env.SAM_STACK_NAME }} \
+              --region ${{ env.AWS_REGION }} \
+              --max-items 30 \
+              --output table || true
+
+            echo "=== FAILED ChangeSet Details ==="
+            CS=$(aws cloudformation list-change-sets --stack-name ${{ env.SAM_STACK_NAME }} --region ${{ env.AWS_REGION }} --query "Summaries[?Status=='FAILED'] | [0].ChangeSetId" --output text)
+            if [ "$CS" != "None" ]; then
+              aws cloudformation describe-change-set --stack-name ${{ env.SAM_STACK_NAME }} --change-set-name $CS --region ${{ env.AWS_REGION }} --output json
+            fi
             exit 1
           fi

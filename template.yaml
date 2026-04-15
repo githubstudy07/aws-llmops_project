@@ -35,7 +35,7 @@ Resources:
   LangGraphAgentFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${LangGraphAgentFunction}"
+      # LogGroupName: !Sub "/aws/lambda/${LangGraphAgentFunction}"
       RetentionInDays: 3
 
   LangGraphAgentFunction:
