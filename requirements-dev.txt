@@ -1,9 +1,7 @@
-crewai[tools]
-chromadb
-boto3
-langfuse
-openinference-instrumentation-crewai
-opentelemetry-exporter-otlp
-pytest
-pytest-mock
-moto[s3,ssm]
+crewai==0.130.0
+chromadb==0.5.23
+boto3==1.38.0
+langfuse==2.60.0
+pytest==8.3.5
+pytest-mock==3.14.0
+moto[s3,ssm]==5.1.0
