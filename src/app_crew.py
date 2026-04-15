@@ -12,7 +12,6 @@ except ImportError:
     print("pysqlite3-binary not found, using standard sqlite3")
 
 import boto3
-from crew_marketing import create_marketing_crew
 
 # 1. 環境設定
 REGION = os.environ.get("AWS_REGION", "ap-northeast-1")
@@ -36,18 +35,26 @@ def get_langfuse_config():
         print(f"Warning: Failed to fetch Langfuse config from SSM: {e}")
         return None
 
-# 2. 初期化 (環境変数のセット)
-LANGFUSE_CONF = get_langfuse_config()
-if LANGFUSE_CONF:
-    os.environ["LANGFUSE_PUBLIC_KEY"] = LANGFUSE_CONF.get("public_key") or ""
-    os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_CONF.get("secret_key") or ""
-    os.environ["LANGFUSE_HOST"] = LANGFUSE_CONF.get("host") or "https://cloud.langfuse.com"
-
 def lambda_handler(event, context):
     """
     CrewAI (Marketing) を実行するメインハンドラー
     """
     print("Lambda started")
+    
+    # SQLite バージョン診断
+    try:
+        import sqlite3
+        print(f"SQLite version in handler: {sqlite3.sqlite_version}")
+    except Exception as e:
+        print(f"Diagnostic error: {e}")
+
+    # 2. 初期化 (環境変数のセット) - Init タイムアウトを避けるためハンドラー内で実行
+    langfuse_conf = get_langfuse_config()
+    if langfuse_conf:
+        os.environ["LANGFUSE_PUBLIC_KEY"] = langfuse_conf.get("public_key") or ""
+        os.environ["LANGFUSE_SECRET_KEY"] = langfuse_conf.get("secret_key") or ""
+        os.environ["LANGFUSE_HOST"] = langfuse_conf.get("host") or "https://cloud.langfuse.com"
+        print("Langfuse environment variables set")
     
     # 3. 入力データの取得
     body_data = {}
@@ -63,6 +70,7 @@ def lambda_handler(event, context):
     
     try:
         # 4. Crew の作成と実行
+        from crew_marketing import create_marketing_crew
         print("Creating marketing crew...")
         crew = create_marketing_crew()
         print("Crew created. Starting kickoff...")
