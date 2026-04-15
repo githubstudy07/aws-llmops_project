@@ -18,7 +18,6 @@ def lambda_handler(event, context):
             "Access-Control-Allow-Origin": "*"
         },
         "body": json.dumps({
-                "runtime": "python:3.12 (AL2023)"
-            }
+            "runtime": "python:3.12 (AL2023)"
         })
     }
