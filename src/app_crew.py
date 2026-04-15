@@ -28,9 +28,9 @@ def get_langfuse_config():
 # 2. 初期化 (環境変数のセット)
 LANGFUSE_CONF = get_langfuse_config()
 if LANGFUSE_CONF:
-    os.environ["LANGFUSE_PUBLIC_KEY"] = LANGFUSE_CONF.get("public_key", "")
-    os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_CONF.get("secret_key", "")
-    os.environ["LANGFUSE_HOST"] = LANGFUSE_CONF.get("host", "https://cloud.langfuse.com")
+    os.environ["LANGFUSE_PUBLIC_KEY"] = LANGFUSE_CONF.get("public_key") or ""
+    os.environ["LANGFUSE_SECRET_KEY"] = LANGFUSE_CONF.get("secret_key") or ""
+    os.environ["LANGFUSE_HOST"] = LANGFUSE_CONF.get("host") or "https://cloud.langfuse.com"
 
 def lambda_handler(event, context):
     """
