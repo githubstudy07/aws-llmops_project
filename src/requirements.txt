@@ -1,10 +1,9 @@
+# Minimal requirements for infrastructure health check (Phase 8-2.1)
 boto3>=1.35.81
 botocore>=1.35.81
-langgraph
-langgraph-checkpoint-dynamodb
 python-dotenv
-langchain
-langfuse>=2.57.0
-crewai
-langchain-aws
-openinference-instrumentation-crewai
+# crewai, numpy, etc. are temporarily removed to isolate build/runtime issues.
+# crewai
+# langchain
+# langfuse
+# langchain-aws
