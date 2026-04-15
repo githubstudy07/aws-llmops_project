@@ -104,7 +104,7 @@ Resources:
         IntegrationHttpMethod: POST
         Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LangGraphAgentFunction.Arn}/invocations"
 
-  LangGraphApiDeploymentV2:
+  LangGraphApiDeploymentV3:
     Type: AWS::ApiGateway::Deployment
     DependsOn: 
       - LangGraphApiChatMethod
@@ -115,7 +115,7 @@ Resources:
   LangGraphApiProdStage:
     Type: AWS::ApiGateway::Stage
     Properties:
-      DeploymentId: !Ref LangGraphApiDeploymentV2
+      DeploymentId: !Ref LangGraphApiDeploymentV3
       RestApiId: !Ref LangGraphApi
       StageName: Prod
 
