@@ -21,6 +21,12 @@ Globals:
 
 Resources:
   # 1. Lambda 関数の定義
+  LangGraphAgentFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${LangGraphAgentFunction}"
+      RetentionInDays: 3
+
   LangGraphAgentFunction:
     Type: AWS::Serverless::Function
     Metadata:

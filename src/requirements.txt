@@ -1,1 +1,5 @@
-# Empty requirements for isolation test
+crewai
+pysqlite3-binary
+langchain-aws
+langfuse
+openinference-instrument-crewai
