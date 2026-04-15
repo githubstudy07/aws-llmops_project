@@ -14,10 +14,20 @@ Parameters:
 
 Globals:
   Function:
-    Timeout: 60
-    MemorySize: 512
+    Timeout: 300
+    MemorySize: 2048
+    EphemeralStorage:
+      Size: 1024
     LoggingConfig:
       LogFormat: JSON
+    Environment:
+      Variables:
+        AWS_REGION: !Ref AWS::Region
+        CHROMA_DB_PATH: /tmp/chroma_db
+        CREWAI_STORAGE_DIR: /tmp/crewai_storage
+        HF_HOME: /tmp/huggingface
+        SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
+        HOME: /tmp
 
 Resources:
   # 1. Lambda 関数の定義
@@ -31,25 +41,25 @@ Resources:
     Type: AWS::Serverless::Function
     Metadata:
       Dockerfile: Dockerfile
-      DockerContext: ./src
+      DockerContext: .
       DockerTag: v1
     Properties:
       PackageType: Image
       ImageConfig:
-        Command: ["app_crew.lambda_handler"]
-      Timeout: 300
-      MemorySize: 1024
-      Environment:
-        Variables:
-          BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
-          CHECKPOINT_TABLE: !Ref CheckpointTableName
-          WRITES_TABLE: !Ref WritesTableName
+        Command: ["crew_app.app_crew.handler"]
       Policies:
+        - AWSLambdaBasicExecutionRole
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
+                - bedrock:InvokeModelWithResponseStream
               Resource: "*"
+            - Effect: Allow
+              Action:
+                - ssm:GetParameters
+                - ssm:GetParameter
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/*"
         - DynamoDBCrudPolicy:
             TableName: !Ref CheckpointTableName
         - DynamoDBCrudPolicy:
@@ -62,6 +72,11 @@ Resources:
               Resource:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/"
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0"
+          CHECKPOINT_TABLE: !Ref CheckpointTableName
+          WRITES_TABLE: !Ref WritesTableName
 
   # 2. 完全明示的な API Gateway の定義
   LangGraphApi:

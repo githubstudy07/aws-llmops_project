@@ -1,7 +1,9 @@
 crewai[tools]
-pysqlite3-binary
 chromadb
 boto3
 langfuse
 openinference-instrumentation-crewai
 opentelemetry-exporter-otlp
+pytest
+pytest-mock
+moto[s3,ssm]

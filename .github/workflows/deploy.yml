@@ -1,50 +1,72 @@
-name: Deploy SAM Application
+name: Build, Test, and Deploy
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch: # GitHub Actions-⑭ 手動トリガー
+    branches:
+      - main
+  workflow_dispatch:
 
-# GitHub Actions-⑬ Concurrency 制御: 前の実行が残っている場合はキャンセルしてコスト節約
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-permissions:
-  id-token: write # OIDC 認証に必須
-  contents: read  # ソースコード読み取りに必須
+env:
+  AWS_REGION: ap-northeast-1
+  SAM_STACK_NAME: handson-llmops-vfinal
 
 jobs:
-  # GitHub Actions-5-2 テスト自動化
+  # ------------------------------------------------------------------
+  # Job 1: テスト (requirements-dev.txt 使用 / pysqlite3 不要環境)
+  # ------------------------------------------------------------------
   test:
+    name: Run pytest
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest
-      - name: Run tests
-        run: |
-          export PYTHONPATH=$PYTHONPATH:.:src
-          pytest tests/
+          cache: "pip"
+          cache-dependency-path: requirements-dev.txt
 
+      - name: Install dev dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run pytest
+        run: |
+          # LAMBDA_TASK_ROOT を明示的に unset してテスト環境を保証
+          unset LAMBDA_TASK_ROOT
+          export PYTHONPATH=$PYTHONPATH:.
+          pytest tests/ -v --tb=short
+
+  # ------------------------------------------------------------------
+  # Job 2: ビルド & デプロイ (main ブランチへの push のみ)
+  # ------------------------------------------------------------------
   deploy:
-    needs: test # テストが成功した場合のみデプロイを実行
+    name: SAM Build and Deploy
+    needs: test
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4 # GitHub Actions-④ アクション利用
+    if: github.ref == 'refs/heads/main'
 
-      - name: Configure AWS credentials
+    permissions:
+      id-token: write  # OIDC 認証用
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::891377371917:role/github-actions-deployment-role
-          aws-region: ap-northeast-1
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
       - name: Setup SAM CLI
         uses: aws-actions/setup-sam@v2
@@ -55,9 +77,9 @@ jobs:
       - name: SAM Deploy
         run: |
           sam deploy \
-            --stack-name handson-llmops-vfinal \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
             --capabilities CAPABILITY_IAM \
-            --region ap-northeast-1 \
+            --region ${{ env.AWS_REGION }} \
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \

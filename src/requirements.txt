@@ -1,5 +1,0 @@
-crewai
-pysqlite3-binary
-langchain-aws
-langfuse
-openinference-instrument-crewai
