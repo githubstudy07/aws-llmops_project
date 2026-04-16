@@ -3,7 +3,6 @@ chromadb==0.5.23
 # langchain-community>=0.3.0,<0.4.0 (Optional, not used specifically in Phase 9-1)
 pysqlite3-binary==0.5.4
 boto3>=1.35.0
-litellm==1.59.8
 langfuse==2.60.0
 openinference-instrumentation-crewai
 opentelemetry-exporter-otlp
