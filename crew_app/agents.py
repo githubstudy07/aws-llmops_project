@@ -1,18 +1,16 @@
 # File: crew_app/agents.py
-"""エージェント定義"""
+"""エージェント定義 — Phase 9-1 updated."""
 
 from __future__ import annotations
 
 import os
 from crewai import Agent
-
 from crew_app.tools import DuckDuckGoSearchTool
-
 
 # デフォルト LLM を環境変数で切替可能にする
 DEFAULT_LLM = os.environ.get(
     "CREWAI_LLM_MODEL",
-    "bedrock/amazon.nova-micro-v1:0",
+    "bedrock/us.amazon.nova-micro-v1:0",
 )
 
 
@@ -25,11 +23,6 @@ def make_researcher(*, llm: str | None = None) -> Agent:
     Returns:
         Web 検索ツール付きの Researcher Agent
     """
-    search_tool = DuckDuckGoSearchTool(
-        max_results=5,
-        request_timeout=20,
-    )
-
     resolved_llm = llm or DEFAULT_LLM
 
     return Agent(
@@ -41,14 +34,16 @@ def make_researcher(*, llm: str | None = None) -> Agent:
         backstory=(
             "You are an expert researcher with deep experience in "
             "finding, verifying, and synthesizing information from "
-            "multiple web sources. You always cite your sources."
+            "multiple web sources. You always use your search tool (duckduckgo_search) "
+            "to verify facts with current web sources."
         ),
-        tools=[search_tool],
+        tools=[DuckDuckGoSearchTool()],
         llm=resolved_llm,
         verbose=True,
-        allow_delegation=False,
         # Nova Micro 向け: 最大反復回数を制限して暴走を防止
-        max_iter=10,
+        max_iter=3,          # ★ 計画書に基づき 3 回に制限（課金防止）
+        max_retry_limit=1,
+        allow_delegation=False,
     )
 
 
@@ -65,5 +60,5 @@ def make_copywriter(*, llm: str | None = None) -> Agent:
         llm=resolved_llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=10,
+        max_iter=3,          # ★ 計画書に基づき制限
     )

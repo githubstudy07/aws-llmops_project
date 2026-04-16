@@ -1,67 +1,50 @@
 # File: crew_app/tasks.py
-"""タスク定義"""
+"""タスク定義 — Phase 9-1 updated."""
 
 from __future__ import annotations
 
-from crewai import Agent, Task
+from crewai import Task
 
 
-def make_research_task(*, agent: Agent, topic: str) -> Task:
-    """リサーチタスクを生成する。
+def make_research_task(agent, topic: str) -> Task:
+    """Web 検索を活用した調査タスクを生成する。
 
     Args:
-        agent: 担当エージェント
+        agent: Researcher エージェント
         topic: 調査テーマ
-
-    Returns:
-        Task オブジェクト
     """
     return Task(
         description=(
-            f"Conduct thorough research on the following topic: '{topic}'.\n\n"
-            "You MUST follow these steps exactly:\n\n"
-            "Step 1: Use the 'DuckDuckGo Search Tool' to search for the topic.\n"
-            "  - To use the tool, provide a search query as input.\n"
-            "Step 2: Read the search results carefully.\n"
-            "Step 3: Use the 'DuckDuckGo Search Tool' again with a different "
-            "query to find additional perspectives.\n"
-            "Step 4: Synthesize all findings into a structured report.\n\n"
-            "IMPORTANT: You MUST use the search tool at least 2 times "
-            "before writing the final report.\n"
+            f"Research the topic: '{topic}'.\n"
+            "You MUST use the duckduckgo_search tool at least once to find current information.\n"
+            "Collect key facts, recent developments, and relevant data.\n"
+            "Organize findings in a structured format."
         ),
         expected_output=(
-            "A research report in the following exact format:\n\n"
-            "## Executive Summary\n"
-            "(2-3 sentences summarizing the key findings)\n\n"
-            "## Key Findings\n"
-            "- Finding 1 (Source: URL)\n"
-            "- Finding 2 (Source: URL)\n"
-            "- Finding 3 (Source: URL)\n\n"
-            "## Detailed Analysis\n"
-            "(3-5 paragraphs with detailed analysis)\n\n"
-            "## Conclusion\n"
-            "(2-3 sentences with recommendations)\n"
+            "A structured report containing:\n"
+            "1) 3-5 key facts (bullet points)\n"
+            "2) Recent developments\n"
+            "3) Eventual sources/URLs found during search"
         ),
         agent=agent,
     )
 
 
-def make_writing_task(*, agent: Agent, research_task: Task, topic: str) -> Task:
-    """執筆タスクを生成する。"""
+def make_writing_task(agent, research_task: Task, topic: str) -> Task:
+    """調査結果を元にしたライティングタスクを生成する。
+
+    Args:
+        agent: Copywriter エージェント
+        research_task: 先行する調査タスク
+        topic: 調査テーマ
+    """
     return Task(
         description=(
-            f"Based on the researcher's findings, write a high-quality article on the topic: '{topic}'.\n\n"
-            "- Engaging title and introduction\n"
-            "- Structured body based on research findings\n"
-            "- Conclusion with a call to action"
+            f"Using the research findings provided for the topic '{topic}', "
+            "write a concise summary (200 words maximum). "
+            "Focus on accuracy and clarity. Do not fabricate information."
         ),
-        expected_output=(
-            "Completed article (Japanese, Markdown format):\n"
-            "- Title\n"
-            "- Introduction (200+ characters)\n"
-            "- Body (3+ sections)\n"
-            "- Conclusion"
-        ),
+        expected_output="A well-written summary of approximately 150-200 words.",
         agent=agent,
         context=[research_task],
     )

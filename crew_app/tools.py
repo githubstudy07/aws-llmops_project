@@ -1,5 +1,5 @@
 # File: crew_app/tools.py
-"""Web検索ツール定義（DuckDuckGo）"""
+"""Phase 9-1: DuckDuckGo Web Search Tool for CrewAI."""
 
 from __future__ import annotations
 
@@ -10,87 +10,58 @@ from crewai.tools import BaseTool
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# DuckDuckGo 検索ツール（CrewAI BaseTool 準拠）
-# ---------------------------------------------------------------------------
 
 class DuckDuckGoSearchTool(BaseTool):
-    """DuckDuckGo を利用した Web 検索ツール。
+    """DuckDuckGo search tool compatible with CrewAI v0.100+ (Pydantic v2)."""
 
-    CrewAI の BaseTool を継承し、Agent が自律的に呼び出せる形式で提供する。
-    Lambda 環境での実行を考慮し、タイムアウトと例外処理を内包する。
-    """
-
-    name: str = "DuckDuckGo Search Tool"
+    name: str = "duckduckgo_search"
     description: str = (
-        "Searches the web using DuckDuckGo and returns relevant results. "
-        "Use this tool when you need to find up-to-date information on any topic. "
-        "Input should be a search query string."
+        "Searches the web using DuckDuckGo. Returns a summary of top results. "
+        "Use this when you need current or real-time information. "
+        "Input: a search query string."
     )
-
-    # 検索結果の最大取得件数
-    max_results: int = 5
-    # HTTP リクエストのタイムアウト（秒）
-    request_timeout: int = 20
+    max_results: int = 3
 
     def _run(self, query: str, **kwargs: Any) -> str:
-        """検索を実行し、結果を文字列で返す。
+        """Execute search. duckduckgo_search is imported lazily to avoid
+        import errors in environments where it is mocked or unavailable.
 
         Args:
-            query: 検索クエリ文字列
+            query: Search query string.
 
         Returns:
-            検索結果のサマリー文字列。エラー時はエラーメッセージ。
+            Formatted search results, or an informative message on failure.
         """
-        if not query or not query.strip():
-            return "Error: Empty search query provided."
-
+        # --- 遅延 import（テスト時の Mock 対応 + Lambda 環境での安全性） ---
         try:
             from duckduckgo_search import DDGS
-        except ImportError as e:
-            logger.error("duckduckgo-search is not installed: %s", e)
-            return (
-                "Error: duckduckgo-search library is not available. "
-                "Please install it with: pip install duckduckgo-search"
-            )
+        except ImportError as exc:
+            return f"[Tool Error] duckduckgo-search package is not installed: {exc}"
 
+        # --- 検索実行 ---
         try:
-            logger.info("Searching DuckDuckGo for: %s", query)
             with DDGS() as ddgs:
-                results = list(
-                    ddgs.text(
-                        keywords=query,
-                        max_results=self.max_results,
-                    )
-                )
-
-            if not results:
-                logger.warning("No results found for query: %s", query)
-                return f"No results found for: {query}"
-
-            # 検索結果を構造化テキストとしてフォーマット
-            formatted = []
-            for i, r in enumerate(results, 1):
-                title = r.get("title", "No Title")
-                href = r.get("href", "")
-                body = r.get("body", "")
-                formatted.append(
-                    f"[{i}] {title}\n    URL: {href}\n    Snippet: {body}"
-                )
-
-            output = "\n\n".join(formatted)
-            logger.info(
-                "DuckDuckGo search returned %d results for: %s",
-                len(results),
-                query,
+                raw_results = list(ddgs.text(query, max_results=self.max_results))
+        except Exception as exc:
+            logger.warning("DuckDuckGo search failed for query '%s': %s", query, exc)
+            return (
+                f"[Search Error] Web search failed: {exc}. "
+                "Try rephrasing the query or proceed with existing knowledge."
             )
-            return output
 
-        except TimeoutError:
-            logger.error("DuckDuckGo search timed out for query: %s", query)
-            return f"Error: Search timed out for query: {query}"
-        except Exception as e:
-            logger.error(
-                "DuckDuckGo search failed for query '%s': %s", query, e
+        # --- 結果なしの場合 ---
+        if not raw_results:
+            return (
+                f"[No Results] No results found for '{query}'. "
+                "Try a different query or proceed with existing knowledge."
             )
-            return f"Error: Search failed with: {type(e).__name__}: {e}"
+
+        # --- 結果フォーマット ---
+        parts: list[str] = []
+        for i, r in enumerate(raw_results, 1):
+            title = r.get("title", "No Title")
+            href = r.get("href", "")
+            body = r.get("body", "No snippet available.")
+            parts.append(f"[{i}] {title}\n    URL: {href}\n    Snippet: {body}")
+
+        return "\n\n".join(parts)
