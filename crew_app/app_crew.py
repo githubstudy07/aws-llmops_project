@@ -102,10 +102,12 @@ def handler(event: dict, context: object) -> dict:
 
         # 最新ガイドに合わせ 'topic' を使用
         topic: str = body.get("topic", "")
+        content_id: str | None = body.get("content_id", None)
+        
         if not topic:
             return _response(400, {"error": "topic is required."})
 
-        crew = build_crew(topic=topic)
+        crew = build_crew(topic=topic, content_id=content_id)
         result = crew.kickoff(inputs={"topic": topic})
 
         return _response(200, {"result": str(result)})

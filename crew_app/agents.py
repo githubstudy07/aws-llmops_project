@@ -1,11 +1,13 @@
 # File: crew_app/agents.py
-"""エージェント定義 — Phase 9-1 updated."""
+"""エージェント定義 — Phase 9-1 & 9-2."""
 
 from __future__ import annotations
 
 import os
+
 from crewai import Agent
-from crew_app.tools import DuckDuckGoSearchTool
+
+from crew_app.tools import DuckDuckGoSearchTool, DynamoDBReadTool, DynamoDBWriteTool
 
 # デフォルト LLM を環境変数で切替可能にする
 DEFAULT_LLM = os.environ.get(
@@ -15,14 +17,7 @@ DEFAULT_LLM = os.environ.get(
 
 
 def make_researcher(*, llm: str | None = None) -> Agent:
-    """Researcher エージェントを生成する。
-
-    Args:
-        llm: 使用する LLM モデル名。None の場合は DEFAULT_LLM を使用。
-
-    Returns:
-        Web 検索ツール付きの Researcher Agent
-    """
+    """Researcher エージェントを生成する。"""
     resolved_llm = llm or DEFAULT_LLM
 
     return Agent(
@@ -41,7 +36,7 @@ def make_researcher(*, llm: str | None = None) -> Agent:
         llm=resolved_llm,
         verbose=True,
         # Nova Micro 向け: 最大反復回数を制限して暴走を防止
-        max_iter=3,          # ★ 計画書に基づき 3 回に制限（課金防止）
+        max_iter=3,
         max_retry_limit=1,
         allow_delegation=False,
     )
@@ -60,5 +55,27 @@ def make_copywriter(*, llm: str | None = None) -> Agent:
         llm=resolved_llm,
         verbose=True,
         allow_delegation=False,
-        max_iter=3,          # ★ 計画書に基づき制限
+        max_iter=3,
+    )
+
+
+def make_archivist(*, llm: str | None = None) -> Agent:
+    """アーキビスト（記録係）エージェントを生成する。"""
+    resolved_llm = llm or DEFAULT_LLM
+    return Agent(
+        role="Data Archivist",
+        goal=(
+            "Accurately save research results and reports into DynamoDB "
+            "and retrieve past data as needed."
+        ),
+        backstory=(
+            "You are a specialist in data archiving. You systematically organize "
+            "information and store it in persistent storage. You can also "
+            "efficiently search and retrieve previously stored data."
+        ),
+        llm=resolved_llm,
+        tools=[DynamoDBWriteTool(), DynamoDBReadTool()],
+        verbose=True,
+        allow_delegation=False,
+        max_iter=3,
     )

@@ -1,12 +1,18 @@
 # File: crew_app/tools.py
-"""Phase 9-1: DuckDuckGo Web Search Tool for CrewAI."""
+"""Phase 9-1 & 9-2: Web Search and DynamoDB Tools for CrewAI."""
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any
+import os
+from datetime import datetime, timezone
+from typing import Any, Type
 
+import boto3
+from botocore.exceptions import ClientError
 from crewai.tools import BaseTool
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
@@ -65,3 +71,101 @@ class DuckDuckGoSearchTool(BaseTool):
             parts.append(f"[{i}] {title}\n    URL: {href}\n    Snippet: {body}")
 
         return "\n\n".join(parts)
+
+
+# --------------------------------------------------------------
+# DynamoDB クライアント (Lazy initialization)
+# --------------------------------------------------------------
+_dynamodb_resource = None
+
+
+def _get_dynamodb_table():
+    """DynamoDB テーブルリソースを取得する。"""
+    global _dynamodb_resource
+    if _dynamodb_resource is None:
+        table_name = os.environ.get("ARCHIVE_TABLE", "handson-research-archives")
+        dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+        _dynamodb_resource = dynamodb.Table(table_name)
+    return _dynamodb_resource
+
+
+# ==============================================================
+# DynamoDBWriteTool
+# ==============================================================
+
+class DynamoDBWriteInput(BaseModel):
+    """DynamoDBWriteTool の入力スキーマ"""
+    content_id: str = Field(
+        ...,
+        description="保存するレコードの一意な識別子。例: 'research_ads_20260416'"
+    )
+    content: str = Field(
+        ...,
+        description="保存するテキストコンテンツ（調査結果、分析レポート等）"
+    )
+
+
+class DynamoDBWriteTool(BaseTool):
+    """DynamoDB にコンテンツを書き込むツール"""
+
+    name: str = "dynamodb_write"
+    description: str = (
+        "調査結果や分析レポートを DynamoDB に永続保存するツール。"
+        "content_id（一意な識別子）と content（テキスト）を指定して保存する。"
+    )
+    args_schema: Type[BaseModel] = DynamoDBWriteInput
+
+    def _run(self, content_id: str, content: str) -> str:
+        """DynamoDB にレコードを書き込む"""
+        try:
+            table = _get_dynamodb_table()
+            item = {
+                "content_id": content_id,
+                "content": content,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "source": "crew_archiver",
+            }
+            table.put_item(Item=item)
+            return f"✅ DynamoDB 書き込み成功: content_id='{content_id}'"
+        except ClientError as e:
+            return f"❌ DynamoDB 書き込みエラー: {e.response['Error']['Message']}"
+        except Exception as e:
+            return f"❌ 予期しないエラー (Write): {str(e)}"
+
+
+# ==============================================================
+# DynamoDBReadTool
+# ==============================================================
+
+class DynamoDBReadInput(BaseModel):
+    """DynamoDBReadTool の入力スキーマ"""
+    content_id: str = Field(
+        ...,
+        description="取得したいレコードの content_id。"
+    )
+
+
+class DynamoDBReadTool(BaseTool):
+    """DynamoDB からコンテンツを読み取るツール"""
+
+    name: str = "dynamodb_read"
+    description: str = (
+        "DynamoDB に保存済みの調査結果を content_id で取得するツール。"
+    )
+    args_schema: Type[BaseModel] = DynamoDBReadInput
+
+    def _run(self, content_id: str) -> str:
+        """DynamoDB からレコードを読み取る"""
+        try:
+            table = _get_dynamodb_table()
+            response = table.get_item(Key={"content_id": content_id})
+
+            if "Item" not in response:
+                return f"⚠️ レコードが見つかりません: content_id='{content_id}'"
+
+            item = response["Item"]
+            return json.dumps(item, ensure_ascii=False, indent=2)
+        except ClientError as e:
+            return f"❌ DynamoDB 読み取りエラー: {e.response['Error']['Message']}"
+        except Exception as e:
+            return f"❌ 予期しないエラー (Read): {str(e)}"
