@@ -27,9 +27,15 @@ def lambda_handler(event: dict, context) -> dict:
     """
     try:
         # リクエストボディのパース
-        body = event.get("body", "{}")
-        if isinstance(body, str):
-            body = json.loads(body)
+        body = event.get("body")
+        if body is None:
+            body = {}
+        elif isinstance(body, str):
+            try:
+                body = json.loads(body)
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse body: {body}")
+                body = {}
             
         topic = body.get("topic", "AIエージェント最新動向")
         mode = body.get("mode", "full")
@@ -86,7 +92,3 @@ def lambda_handler(event: dict, context) -> dict:
                 ensure_ascii=False,
             ),
         }
-
-# SAM 対応のため handler エイリアスを作成
-def handler(event, context):
-    return lambda_handler(event, context)

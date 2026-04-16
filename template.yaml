@@ -56,23 +56,31 @@ Resources:
           # LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は
           # SSM Parameter Store 経由で設定
       Policies:
+        # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)
+        - AWSLambdaBasicExecutionRole
         # ── Bedrock 推論権限 ──
-        # ★ 是正: inference-profile ARN 形式に修正
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource:
-                # クロスリージョン推論プロファイル（us.amazon.nova-micro-v1:0 等）
                 - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.amazon.*"
-                # 東京リージョンのネイティブモデル（フォールバック用）
                 - "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0"
-                - "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
         # ── DynamoDB 操作権限（最小権限）──
-        # ★ Phase 9-2 追加
-        - DynamoDBCrudPolicy:
-            TableName: !Ref ResearchArchivesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+                - dynamodb:DescribeTable
+              Resource:
+                - !GetAtt ResearchArchivesTable.Arn
+                - !Sub "${ResearchArchivesTable.Arn}/index/*"
         # ── SSM パラメータ読み取り権限 ──
         - Statement:
             - Effect: Allow
@@ -83,6 +91,14 @@ Resources:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/"
       Events:
+        ChatApi:
+          Type: Api
+          Properties:
+            Path: /chat
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+            RestApiId: !Ref LangGraphApi
         ResearchApi:
           Type: Api
           Properties:
@@ -92,69 +108,18 @@ Resources:
               ApiKeyRequired: true
             RestApiId: !Ref LangGraphApi
 
-  # 2. 完全明示的な API Gateway の定義
+  # -------------------------------------------------------
+  # 2. API Gateway の定義
+  # -------------------------------------------------------
   LangGraphApi:
     Type: AWS::ApiGateway::RestApi
     Properties:
       Name: LangGraphApi
-      Description: API for LangGraph Agent
+      Description: API for CrewAI Agent (Phase 9-2 Corrected)
 
-  LangGraphApiChatResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      ParentId: !GetAtt LangGraphApi.RootResourceId
-      PathPart: chat
-      RestApiId: !Ref LangGraphApi
-
-  LangGraphApiFeedbackResource:
-    Type: AWS::ApiGateway::Resource
-    Properties:
-      ParentId: !GetAtt LangGraphApi.RootResourceId
-      PathPart: feedback
-      RestApiId: !Ref LangGraphApi
-
-  LangGraphApiChatMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      ApiKeyRequired: true
-      AuthorizationType: NONE
-      HttpMethod: POST
-      ResourceId: !Ref LangGraphApiChatResource
-      RestApiId: !Ref LangGraphApi
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CrewFunction.Arn}/invocations"
-
-  LangGraphApiFeedbackMethod:
-    Type: AWS::ApiGateway::Method
-    Properties:
-      ApiKeyRequired: true
-      AuthorizationType: NONE
-      HttpMethod: POST
-      ResourceId: !Ref LangGraphApiFeedbackResource
-      RestApiId: !Ref LangGraphApi
-      Integration:
-        Type: AWS_PROXY
-        IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CrewFunction.Arn}/invocations"
-
-  LangGraphApiDeploymentV3:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn: 
-      - LangGraphApiChatMethod
-      - LangGraphApiFeedbackMethod
-    Properties:
-      RestApiId: !Ref LangGraphApi
-
-  LangGraphApiProdStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      DeploymentId: !Ref LangGraphApiDeploymentV3
-      RestApiId: !Ref LangGraphApi
-      StageName: Prod
-
-  # 3. 認証リソース
+  # -------------------------------------------------------
+  # 3. 認証・認可 (API Key & Usage Plan)
+  # -------------------------------------------------------
   LangGraphApiKey:
     Type: AWS::ApiGateway::ApiKey
     Properties:
@@ -168,7 +133,20 @@ Resources:
       ApiStages:
         - ApiId: !Ref LangGraphApi
           Stage: !Ref LangGraphApiProdStage
-    DependsOn: LangGraphApiProdStage
+
+  LangGraphApiProdStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref LangGraphApi
+      DeploymentId: !Ref LangGraphApiDeployment
+      StageName: Prod
+
+  LangGraphApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - CrewFunction
+    Properties:
+      RestApiId: !Ref LangGraphApi
 
   LangGraphUsagePlanKey:
     Type: AWS::ApiGateway::UsagePlanKey
@@ -177,29 +155,12 @@ Resources:
       KeyType: API_KEY
       UsagePlanId: !Ref LangGraphUsagePlan
 
-  # 4. Lambda 実行権限の付与
-  LangGraphAgentFunctionChatApiPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref CrewFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LangGraphApi}/*/POST/chat"
-
-  LangGraphAgentFunctionFeedbackApiPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref CrewFunction
-      Principal: apigateway.amazonaws.com
-      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LangGraphApi}/*/POST/feedback"
-
-  # ============================================================
-  # DynamoDB テーブル（Phase 9-2 追加）
-  # ============================================================
+  # -----------------------------------------------------------
+  # 4. DynamoDB テーブル（Phase 9-2）
+  # -----------------------------------------------------------
   ResearchArchivesTable:
     Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete  # ハンズオン用。本番では Retain を推奨
+    DeletionPolicy: Delete
     Properties:
       TableName: handson-research-archives
       BillingMode: PAY_PER_REQUEST
@@ -215,8 +176,8 @@ Resources:
 # ============================================================
 Outputs:
   ApiEndpoint:
-    Description: API Gateway endpoint URL
-    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/research"
+    Description: "API Root Endpoint (SAM Managed)"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   ResearchArchivesTableName:
     Description: DynamoDB table for research archives
     Value: !Ref ResearchArchivesTable

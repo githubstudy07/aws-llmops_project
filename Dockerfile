@@ -25,4 +25,4 @@ ENV HF_HOME=/tmp/huggingface
 ENV SENTENCE_TRANSFORMERS_HOME=/tmp/sentence_transformers
 
 # ハンドラー指定 (パッケージ形式)
-CMD ["crew_app.app_crew.handler"]
+CMD ["crew_app.app_crew.lambda_handler"]
