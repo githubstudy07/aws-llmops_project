@@ -1,123 +1,136 @@
-# File: crew_app/tools.py
+# crew_app/tools.py
 """
-CrewAI カスタムツール定義
-Phase 9-2: DynamoDB Write/Read ツールを追加
+カスタムツール定義
+- DuckDuckGoSearchTool: Web検索
+- DynamoDBWriteTool: DynamoDB へのレコード保存
+- DynamoDBReadTool: DynamoDB からのレコード取得
+
+【セキュリティ原則】
+boto3 クライアントは認証情報をハードコードせず、
+Lambda 実行環境の IAM Role に全面的に委任する。
 """
 
-import json
-import logging
 import os
-from datetime import datetime, timezone
-from typing import Type
-
+import json
 import boto3
 from botocore.exceptions import ClientError
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
+try:
+    from duckduckgo_search import DDGS
 
-# ============================================================
-# DynamoDB ヘルパー
-# ============================================================
-
-def _get_dynamodb_table():
-    """
-    環境変数 RESEARCH_ARCHIVES_TABLE からテーブル名を取得し、
-    boto3 Table リソースを返す。
-    認証情報は Lambda 実行ロールの IAM Role に委任（ハードコード禁止）。
-    """
-    table_name = os.environ.get("RESEARCH_ARCHIVES_TABLE")
-    if not table_name:
-        raise ValueError(
-            "環境変数 RESEARCH_ARCHIVES_TABLE が設定されていません。"
-            "template.yaml の Environment.Variables を確認してください。"
+    class DuckDuckGoSearchTool(BaseTool):
+        name: str = "DuckDuckGo Web Search"
+        description: str = (
+            "Web を検索して最新情報を取得するツール。"
+            "引数に検索クエリ文字列を渡すこと。"
         )
-    dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
-    return dynamodb.Table(table_name)
+
+        def _run(self, query: str) -> str:
+            results = []
+            try:
+                with DDGS() as ddgs:
+                    for r in ddgs.text(query, max_results=5):
+                        results.append(f"- {r['title']}: {r['body']}")
+                return "\n".join(results) if results else "検索結果が見つかりませんでした。"
+            except Exception as e:
+                return f"検索中にエラーが発生しました: {str(e)}"
+
+except ImportError:
+    DuckDuckGoSearchTool = None
 
 
-# ============================================================
-# DynamoDB Write Tool
-# ============================================================
+# -------------------------------------------------------------------
+# DynamoDB ツール用スキーマ定義
+# -------------------------------------------------------------------
 
 class DynamoDBWriteInput(BaseModel):
-    """DynamoDBWriteTool の入力スキーマ"""
-    content_id: str = Field(
-        description="保存するコンテンツの一意な識別子（例: 'research-20260416-001'）"
-    )
-    content: str = Field(
-        description="保存するコンテンツ本文（リサーチ結果、レポート等）"
-    )
+    content_id: str = Field(..., description="保存するレコードの一意なID")
+    content: str = Field(..., description="保存するコンテンツ（調査結果・成果物等）")
 
-
-class DynamoDBWriteTool(BaseTool):
-    """リサーチ結果やレポートを DynamoDB に保存するツール"""
-    name: str = "dynamodb_write"
-    description: str = (
-        "リサーチ結果やレポートを DynamoDB に保存する。"
-        "content_id（一意な識別子）と content（本文）を指定して使用する。"
-        "保存が成功した場合は成功メッセージ、失敗した場合はエラー内容を返す。"
-    )
-    args_schema: Type[BaseModel] = DynamoDBWriteInput
-
-    def _run(self, content_id: str, content: str) -> str:
-        try:
-            table = _get_dynamodb_table()
-            item = {
-                "content_id": content_id,
-                "content": content,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-                "source": "crewai-archivist",
-            }
-            table.put_item(Item=item)
-            logger.info(f"DynamoDB 書き込み成功: content_id={content_id}")
-            return f"保存成功: content_id='{content_id}' を DynamoDB に保存しました。"
-        except ClientError as e:
-            error_msg = e.response["Error"]["Message"]
-            logger.error(f"DynamoDB 書き込み失敗: {error_msg}")
-            return f"保存失敗: {error_msg}"
-        except Exception as e:
-            logger.error(f"DynamoDB 書き込み例外: {e}")
-            return f"保存失敗: {str(e)}"
-
-
-# ============================================================
-# DynamoDB Read Tool
-# ============================================================
 
 class DynamoDBReadInput(BaseModel):
-    """DynamoDBReadTool の入力スキーマ"""
-    content_id: str = Field(
-        description="取得したいコンテンツの識別子（例: 'research-20260416-001'）"
-    )
+    content_id: str = Field(..., description="取得するレコードの一意なID")
 
+
+# -------------------------------------------------------------------
+# DynamoDB 書き込みツール
+# -------------------------------------------------------------------
+
+class DynamoDBWriteTool(BaseTool):
+    """
+    DynamoDB の WRITES_TABLE にレコードを保存するツール。
+    認証は Lambda IAM Role を使用。
+    """
+    name: str = "DynamoDB Write Tool"
+    description: str = (
+        "調査結果や成果物を DynamoDB に保存するツール。"
+        "content_id（一意なID文字列）と content（保存内容）を引数として渡すこと。"
+    )
+    args_schema: type[BaseModel] = DynamoDBWriteInput
+
+    def _run(self, content_id: str, content: str) -> str:
+        table_name = os.environ.get("WRITES_TABLE")
+        if not table_name:
+            return "エラー: 環境変数 WRITES_TABLE が設定されていません。"
+
+        try:
+            dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+            table = dynamodb.Table(table_name)
+            table.put_item(
+                Item={
+                    "content_id": content_id,
+                    "content": content,
+                }
+            )
+            return f"✅ DynamoDB への保存に成功しました。content_id: {content_id}"
+
+        except ClientError as e:
+            error_code = e.response["Error"]["Code"]
+            error_msg = e.response["Error"]["Message"]
+            return f"❌ DynamoDB 書き込みエラー [{error_code}]: {error_msg}"
+
+        except Exception as e:
+            return f"❌ 予期しないエラー: {str(e)}"
+
+
+# -------------------------------------------------------------------
+# DynamoDB 読み取りツール
+# -------------------------------------------------------------------
 
 class DynamoDBReadTool(BaseTool):
-    """DynamoDB から過去のリサーチ結果やレポートを取得するツール"""
-    name: str = "dynamodb_read"
+    """
+    DynamoDB の WRITES_TABLE からレコードを取得するツール。
+    認証は Lambda IAM Role を使用。
+    """
+    name: str = "DynamoDB Read Tool"
     description: str = (
-        "DynamoDB から過去のリサーチ結果やレポートを取得する。"
-        "content_id を指定して、保存済みのコンテンツを読み取る。"
-        "該当データがあればその内容を、なければ未検出メッセージを返す。"
+        "過去に保存した調査結果・成果物を DynamoDB から取得するツール。"
+        "content_id（一意なID文字列）を引数として渡すこと。"
     )
-    args_schema: Type[BaseModel] = DynamoDBReadInput
+    args_schema: type[BaseModel] = DynamoDBReadInput
 
     def _run(self, content_id: str) -> str:
+        table_name = os.environ.get("WRITES_TABLE")
+        if not table_name:
+            return "エラー: 環境変数 WRITES_TABLE が設定されていません。"
+
         try:
-            table = _get_dynamodb_table()
+            dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
+            table = dynamodb.Table(table_name)
             response = table.get_item(Key={"content_id": content_id})
-            item = response.get("Item")
-            if item:
-                logger.info(f"DynamoDB 読み取り成功: content_id={content_id}")
-                return json.dumps(item, ensure_ascii=False, default=str)
+
+            if "Item" in response:
+                item = response["Item"]
+                return f"✅ 取得成功。\ncontent_id: {item['content_id']}\ncontent:\n{item['content']}"
             else:
-                logger.info(f"DynamoDB レコード未検出: content_id={content_id}")
-                return f"該当なし: content_id='{content_id}' のレコードは見つかりませんでした。"
+                return f"⚠️ content_id: {content_id} のレコードは存在しません。"
+
         except ClientError as e:
+            error_code = e.response["Error"]["Code"]
             error_msg = e.response["Error"]["Message"]
-            logger.error(f"DynamoDB 読み取り失敗: {error_msg}")
-            return f"読み取り失敗: {error_msg}"
+            return f"❌ DynamoDB 読み取りエラー [{error_code}]: {error_msg}"
+
         except Exception as e:
-            logger.error(f"DynamoDB 読み取り例外: {e}")
-            return f"読み取り失敗: {str(e)}"
+            return f"❌ 予期しないエラー: {str(e)}"

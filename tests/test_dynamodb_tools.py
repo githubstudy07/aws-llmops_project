@@ -1,71 +1,76 @@
-# File: tests/test_dynamodb_tools.py
+# tests/test_dynamodb_tools.py
 """
-DynamoDB ツール単体テスト
-前提: 環境変数 RESEARCH_ARCHIVES_TABLE に実在するテーブル名が設定されていること
-      AWS 認証情報が利用可能であること（ローカルでは ~/.aws/credentials 等）
+DynamoDB カスタムツールのユニットテスト
+boto3 は unittest.mock でモック化し、実際の AWS 呼び出しは行わない
 """
 
-import json
 import os
-import uuid
-
 import pytest
+from unittest.mock import patch, MagicMock
+from botocore.exceptions import ClientError
 
-# テスト対象テーブル名の設定
-# デプロイ後のテーブル名を指定（未デプロイ時はスキップ）
-TABLE_NAME = os.environ.get("RESEARCH_ARCHIVES_TABLE", "handson-research-archives")
-os.environ["RESEARCH_ARCHIVES_TABLE"] = TABLE_NAME
+os.environ["WRITES_TABLE"] = "handson-research-archives"
 
 from crew_app.tools import DynamoDBWriteTool, DynamoDBReadTool
 
 
-@pytest.fixture
-def unique_content_id():
-    """テストごとに一意な content_id を生成"""
-    return f"test-{uuid.uuid4().hex[:8]}"
-
-
 class TestDynamoDBWriteTool:
-    def test_write_success(self, unique_content_id):
-        tool = DynamoDBWriteTool()
-        result = tool._run(
-            content_id=unique_content_id,
-            content="これはテスト用のリサーチ結果です。"
-        )
-        assert "保存成功" in result
-        assert unique_content_id in result
+    def setup_method(self):
+        self.tool = DynamoDBWriteTool()
 
-    def test_write_empty_content(self, unique_content_id):
-        tool = DynamoDBWriteTool()
-        result = tool._run(content_id=unique_content_id, content="")
-        # 空文字列でも DynamoDB は受け付ける（仕様）
-        assert "保存成功" in result
+    @patch("crew_app.tools.boto3.resource")
+    def test_write_success(self, mock_boto3_resource):
+        """正常系: put_item が成功した場合"""
+        mock_table = MagicMock()
+        mock_boto3_resource.return_value.Table.return_value = mock_table
+
+        result = self.tool._run(content_id="test-001", content="テストコンテンツ")
+
+        mock_table.put_item.assert_called_once_with(
+            Item={"content_id": "test-001", "content": "テストコンテンツ"}
+        )
+        assert "✅" in result
+        assert "test-001" in result
+
+    @patch("crew_app.tools.boto3.resource")
+    def test_write_client_error(self, mock_boto3_resource):
+        """異常系: ClientError が発生した場合"""
+        mock_table = MagicMock()
+        mock_table.put_item.side_effect = ClientError(
+            {"Error": {"Code": "ResourceNotFoundException", "Message": "Table not found"}},
+            "PutItem",
+        )
+        mock_boto3_resource.return_value.Table.return_value = mock_table
+
+        result = self.tool._run(content_id="test-002", content="エラーテスト")
+        assert "❌" in result
+        assert "ResourceNotFoundException" in result
 
 
 class TestDynamoDBReadTool:
-    def test_read_existing_item(self, unique_content_id):
-        # 先に書き込み
-        write_tool = DynamoDBWriteTool()
-        write_tool._run(
-            content_id=unique_content_id,
-            content="読み取りテスト用データ"
-        )
+    def setup_method(self):
+        self.tool = DynamoDBReadTool()
 
-        # 読み取り
-        read_tool = DynamoDBReadTool()
-        result = read_tool._run(content_id=unique_content_id)
-        parsed = json.loads(result)
-        assert parsed["content_id"] == unique_content_id
-        assert parsed["content"] == "読み取りテスト用データ"
-        assert "created_at" in parsed
+    @patch("crew_app.tools.boto3.resource")
+    def test_read_success(self, mock_boto3_resource):
+        """正常系: get_item が成功した場合"""
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {
+            "Item": {"content_id": "test-001", "content": "保存済みコンテンツ"}
+        }
+        mock_boto3_resource.return_value.Table.return_value = mock_table
 
-    def test_read_nonexistent_item(self):
-        read_tool = DynamoDBReadTool()
-        result = read_tool._run(content_id="nonexistent-id-99999")
-        assert "該当なし" in result
+        result = self.tool._run(content_id="test-001")
+        assert "✅" in result
+        assert "保存済みコンテンツ" in result
 
+    @patch("crew_app.tools.boto3.resource")
+    def test_read_item_not_found(self, mock_boto3_resource):
+        """正常系: 対象レコードが存在しない場合"""
+        mock_table = MagicMock()
+        mock_table.get_item.return_value = {}  # Item キーなし
+        mock_boto3_resource.return_value.Table.return_value = mock_table
 
-class TestEnvironmentVariable:
-    def test_table_name_is_set(self):
-        assert os.environ.get("RESEARCH_ARCHIVES_TABLE") is not None
-        assert len(os.environ.get("RESEARCH_ARCHIVES_TABLE")) > 0
+        result = self.tool._run(content_id="nonexistent-id")
+        assert "⚠️" in result
+        assert "nonexistent-id" in result

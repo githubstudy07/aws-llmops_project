@@ -1,56 +1,65 @@
-# File: crew_app/app_crew.py
+# crew_app/app_crew.py
 """
-Lambda ハンドラー: CrewAI エントリーポイント
-Phase 9-2: リサーチ → アーカイブ の Sequential Crew
+Lambda エントリーポイント
+- API Gateway からのリクエストを受け取り、Crew を実行して結果を返す
 """
 
 import json
-import logging
 import os
-
+import uuid
+import logging
 from crewai import Crew, Process
-from crew_app.tasks import create_research_task, create_archive_task
+
+from crew_app.tasks import (
+    create_research_task,
+    create_writing_task,
+    create_archive_task,
+    create_read_task,
+)
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# --- Langfuse 初期化（既存処理を維持） ---
-# Langfuse の CallbackHandler 初期化コードがある場合はここに配置
-# from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
-# langfuse_handler = LangfuseCallbackHandler(...)
-
-
-def handler(event, context):
+def lambda_handler(event: dict, context) -> dict:
     """
-    Lambda ハンドラー。
-    入力: {"body": "{\"topic\": \"...\"}"}
-    出力: {"statusCode": 200, "body": "{\"status\": \"success\", ...}"}
+    Lambda ハンドラー関数。
+    API Gateway からの POST リクエストを処理する。
     """
     try:
-        # --- リクエスト解析 ---
+        # リクエストボディのパース
         body = event.get("body", "{}")
         if isinstance(body, str):
             body = json.loads(body)
-        topic = body.get("topic", "AI の最新トレンド")
+            
+        topic = body.get("topic", "AIエージェント最新動向")
+        mode = body.get("mode", "full")
+        content_id = body.get("content_id", f"research-{uuid.uuid4().hex[:8]}")
 
-        logger.info(f"Crew 実行開始: topic='{topic}'")
+        logger.info(f"Execution started. mode={mode}, topic={topic}, content_id={content_id}")
 
-        # --- タスク生成 ---
-        research_task = create_research_task(topic)
-        archive_task = create_archive_task(topic)
+        if mode == "read":
+            # 読み取りモード
+            read_task, archivist = create_read_task(content_id)
+            crew = Crew(
+                agents=[archivist],
+                tasks=[read_task],
+                process=Process.sequential,
+                verbose=False,
+            )
+        else:
+            # フルモード: リサーチ → コピー作成 → アーカイブ
+            research_task, researcher = create_research_task(topic)
+            write_task, writer = create_writing_task([research_task])
+            archive_task, archivist = create_archive_task(content_id, [write_task])
 
-        # --- Crew 構成 ---
-        crew = Crew(
-            agents=[research_task.agent, archive_task.agent],
-            tasks=[research_task, archive_task],
-            process=Process.sequential,  # リサーチ → アーカイブ の順序実行
-            verbose=False,  # Lambda環境ではFalse
-        )
+            crew = Crew(
+                agents=[researcher, writer, archivist],
+                tasks=[research_task, write_task, archive_task],
+                process=Process.sequential,
+                verbose=False,
+            )
 
-        # --- 実行 ---
         result = crew.kickoff()
-
-        logger.info(f"Crew 実行完了: result_length={len(str(result))}")
 
         return {
             "statusCode": 200,
@@ -58,7 +67,9 @@ def handler(event, context):
             "body": json.dumps(
                 {
                     "status": "success",
+                    "mode": mode,
                     "topic": topic,
+                    "content_id": content_id,
                     "result": str(result),
                 },
                 ensure_ascii=False,
@@ -66,15 +77,16 @@ def handler(event, context):
         }
 
     except Exception as e:
-        logger.error(f"Crew 実行エラー: {e}", exc_info=True)
+        logger.error(f"Error occurred: {str(e)}", exc_info=True)
         return {
             "statusCode": 500,
             "headers": {"Content-Type": "application/json"},
             "body": json.dumps(
-                {
-                    "status": "error",
-                    "message": str(e),
-                },
+                {"status": "error", "message": str(e)},
                 ensure_ascii=False,
             ),
         }
+
+# SAM 対応のため handler エイリアスを作成
+def handler(event, context):
+    return lambda_handler(event, context)

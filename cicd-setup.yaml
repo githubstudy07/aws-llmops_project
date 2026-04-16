@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: OIDC Provider and IAM Role for GitHub Actions
+Description: OIDC Provider and IAM Role for GitHub Actions with Least Privilege Policy (Phase 9-2)
 
 Parameters:
   GitHubRepo:
@@ -30,9 +30,32 @@ Resources:
             Action: sts:AssumeRoleWithWebIdentity
             Condition:
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:*"
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AdministratorAccess
+                 token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:*"
+      Policies:
+        - PolicyName: GitHubSAMDeploymentPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - s3:*
+                  - lambda:*
+                  - apigateway:*
+                  - ecr:*
+                  - iam:PassRole
+                  - iam:GetRole
+                  - iam:CreateRole
+                  - iam:AttachRolePolicy
+                  - iam:PutRolePolicy
+                  - iam:DeleteRole
+                  - iam:DetachRolePolicy
+                  - iam:DeleteRolePolicy
+                  - dynamodb:*
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - logs:*
+                Resource: "*"
 
 Outputs:
   RoleArn:

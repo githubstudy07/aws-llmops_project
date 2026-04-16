@@ -5,15 +5,9 @@ Description: >
   SAM Template for LangGraph AI Agent with Bedrock, DynamoDB, and Fully Explicit API Gateway Auth
 
 Parameters:
-  CheckpointTableName:
+  ProjectName:
     Type: String
-    Default: handson-langgraph-checkpoints
-  WritesTableName:
-    Type: String
-    Default: handson-langgraph-writes
-  ArchiveTableName:
-    Type: String
-    Default: handson-research-archives-v2
+    Default: handson-research-archives
 
 Globals:
   Function:
@@ -56,11 +50,11 @@ Resources:
         Variables:
           BEDROCK_MODEL_ID: "us.amazon.nova-micro-v1:0"
           # ★ Phase 9-2: テーブル名を CloudFormation 参照で設定
-          RESEARCH_ARCHIVES_TABLE: !Ref ResearchArchivesTable
+          WRITES_TABLE: !Ref ResearchArchivesTable
           LANGFUSE_HOST: "https://cloud.langfuse.com"
           PYTHONUTF8: "1"
           # LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は
-          # SSM Parameter Store 経由で設定（既存処理を維持）
+          # SSM Parameter Store 経由で設定
       Policies:
         # ── Bedrock 推論権限 ──
         # ★ 是正: inference-profile ARN 形式に修正

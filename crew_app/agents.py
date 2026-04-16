@@ -1,18 +1,27 @@
-# File: crew_app/agents.py
+# crew_app/agents.py
 """
-CrewAI エージェント定義
-Phase 9-2: アーキビストエージェントを追加
+エージェント定義
+- create_researcher_agent: Web検索担当リサーチャー
+- create_writer_agent: コピーライター
+- create_archivist_agent: DynamoDB 読み書き担当アーキビスト
 """
 
 import os
 from crewai import Agent, LLM
 from crew_app.tools import DynamoDBWriteTool, DynamoDBReadTool
 
+# DuckDuckGoSearchTool はオプション（インポート失敗時は None）
+try:
+    from crew_app.tools import DuckDuckGoSearchTool
+    _search_tool = DuckDuckGoSearchTool() if DuckDuckGoSearchTool else None
+except Exception:
+    _search_tool = None
 
-def get_llm() -> LLM:
+
+def _get_llm() -> LLM:
     """
-    Bedrock LLM インスタンスを生成する。
-    環境変数 BEDROCK_MODEL_ID からモデルIDを取得。
+    Bedrock Nova Micro を使用する LLM インスタンスを返す。
+    モデル ID は環境変数から取得。
     """
     model_id = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-micro-v1:0")
     return LLM(
@@ -22,44 +31,56 @@ def get_llm() -> LLM:
 
 
 def create_researcher_agent() -> Agent:
-    """
-    リサーチャーエージェント。
-    Phase 9-2 では検索ツールを除外（Lambda環境でのDuckDuckGo 403回避）。
-    自身の知識に基づいて回答する。
-    """
+    """リサーチャーエージェントを生成して返す。"""
+    tools = [_search_tool] if _search_tool else []
     return Agent(
-        role="Senior Researcher",
-        goal="指定されたトピックについて、正確で有用な情報を整理して提供する",
+        role="Senior Research Analyst",
+        goal="与えられたトピックについて正確で最新の情報をWeb検索で収集する",
         backstory=(
-            "あなたは経験豊富なリサーチャーです。"
-            "与えられたトピックについて、自身の知識に基づいて"
-            "簡潔かつ正確な調査レポートを作成してください。"
-            "外部検索ツールは現在利用できません。"
+            "あなたは経験豊富なリサーチアナリストです。"
+            "DuckDuckGo を使い、信頼性の高い情報を効率的に収集できます。"
         ),
-        llm=get_llm(),
-        tools=[],  # Phase 9-2: 検索ツール除外（DuckDuckGo 403 回避）
-        verbose=False,  # Lambda環境ではFalse（エンコーディング問題回避）
-        max_iter=5,  # ループ防止（課金制御）
+        tools=tools,
+        llm=_get_llm(),
+        verbose=False, # Lambda 環境では False
+        allow_delegation=False,
+        max_iter=3,
+    )
+
+
+def create_writer_agent() -> Agent:
+    """コピーライターエージェントを生成して返す。"""
+    return Agent(
+        role="Creative Copywriter",
+        goal="リサーチ結果をもとに、魅力的な広告コピーを作成する",
+        backstory=(
+            "あなたはデジタル広告に精通したコピーライターです。"
+            "データに基づいた説得力のあるコピーを作成できます。"
+        ),
+        tools=[],
+        llm=_get_llm(),
+        verbose=False,
+        allow_delegation=False,
+        max_iter=3,
     )
 
 
 def create_archivist_agent() -> Agent:
     """
-    アーキビスト（記録係）エージェント。
-    DynamoDB への読み書きツールを使用して成果物を管理する。
+    アーキビスト（記録係）エージェントを生成して返す。
+    DynamoDB への読み書きを担当し、エージェント間の長期記憶を管理する。
     """
     return Agent(
-        role="Research Archivist",
-        goal="リサーチ結果を DynamoDB に正確に保存し、過去の成果物を検索・取得する",
+        role="Knowledge Archivist",
+        goal="調査結果や成果物を DynamoDB に保存・取得し、チームの長期記憶を管理する",
         backstory=(
-            "あなたは成果物管理の専門家です。"
-            "リサーチャーから受け取った調査結果を、適切な識別子を付けて"
-            "データベースに保存します。"
-            "content_id は 'research-YYYYMMDD-連番' 形式で生成してください。"
-            "保存が完了したら、使用した content_id を必ず報告してください。"
+            "あなたはチームの記録係です。"
+            "重要な調査結果や成果物を確実にアーカイブし、"
+            "後続タスクで必要な情報を即座に取り出すことができます。"
         ),
-        llm=get_llm(),
         tools=[DynamoDBWriteTool(), DynamoDBReadTool()],
+        llm=_get_llm(),
         verbose=False,
-        max_iter=5,
+        allow_delegation=False,
+        max_iter=3,
     )

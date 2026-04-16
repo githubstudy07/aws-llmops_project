@@ -1,44 +1,97 @@
-# File: crew_app/tasks.py
+# crew_app/tasks.py
 """
-CrewAI タスク定義
-Phase 9-2: アーカイブタスクを追加
+タスク定義
+- create_research_task: Web検索・情報収集タスク
+- create_writing_task: 広告コピー作成タスク
+- create_archive_task: DynamoDB アーカイブタスク
+- create_read_task: DynamoDB 読み取りタスク
 """
 
 from crewai import Task
-from crew_app.agents import create_researcher_agent, create_archivist_agent
+from crew_app.agents import (
+    create_researcher_agent,
+    create_writer_agent,
+    create_archivist_agent,
+)
 
 
-def create_research_task(topic: str) -> Task:
-    """
-    リサーチタスク: 指定トピックについて調査レポートを作成する。
-    """
-    return Task(
+def create_research_task(topic: str) -> tuple[Task, object]:
+    """リサーチタスクとエージェントを生成して返す。"""
+    researcher = create_researcher_agent()
+    task = Task(
         description=(
-            f"以下のトピックについて調査し、要点を日本語で簡潔にまとめてください。\n"
-            f"トピック: {topic}\n"
-            f"回答は300文字以内で、箇条書きを含めてください。"
+            f"'{topic}' について、最新の情報をWeb検索で収集してください。\n"
+            "収集した情報は箇条書き形式で整理し、出典URLも含めてください。"
         ),
-        expected_output="トピックに関する簡潔な調査レポート（日本語・300文字以内・箇条書き含む）",
-        agent=create_researcher_agent(),
+        expected_output=(
+            "・調査トピックの概要\n"
+            "・主要な調査結果（箇条書き5項目以上）\n"
+            "・参考URL一覧"
+        ),
+        agent=researcher,
     )
+    return task, researcher
 
 
-def create_archive_task(topic: str) -> Task:
-    """
-    アーカイブタスク: リサーチ結果を DynamoDB に保存する。
-    前タスクの出力を受け取り、DynamoDB に書き込む。
-    """
-    # content_id 用にトピックをサニタイズ
-    safe_topic = topic[:20].replace(" ", "-").replace("/", "-").lower()
-
-    return Task(
+def create_writing_task(context_tasks: list) -> tuple[Task, object]:
+    """コピー作成タスクとエージェントを生成して返す。"""
+    writer = create_writer_agent()
+    task = Task(
         description=(
-            f"前のタスクで得られたリサーチ結果を DynamoDB に保存してください。\n"
-            f"dynamodb_write ツールを使用し、以下のパラメータで保存してください:\n"
-            f"- content_id: 'research-{safe_topic}'\n"
-            f"- content: 前のタスクのリサーチ結果全文\n"
-            f"保存が完了したら、使用した content_id を報告してください。"
+            "リサーチ結果をもとに、ターゲット顧客に響く広告コピーを3パターン作成してください。\n"
+            "各パターンにキャッチコピー（30文字以内）と本文（100文字以内）を含めること。"
         ),
-        expected_output="DynamoDB への保存完了メッセージと使用した content_id",
-        agent=create_archivist_agent(),
+        expected_output=(
+            "【パターン1】\n"
+            "キャッチコピー: ...\n"
+            "本文: ...\n\n"
+            "【パターン2】\n"
+            "キャッチコピー: ...\n"
+            "本文: ...\n\n"
+            "【パターン3】\n"
+            "キャッチコピー: ...\n"
+            "本文: ..."
+        ),
+        agent=writer,
+        context=context_tasks,
     )
+    return task, writer
+
+
+def create_archive_task(content_id: str, context_tasks: list) -> tuple[Task, object]:
+    """
+    DynamoDB アーカイブタスクとアーキビストエージェントを生成して返す。
+    前タスクの結果を content_id をキーに保存する。
+    """
+    archivist = create_archivist_agent()
+    task = Task(
+        description=(
+            f"前のタスクで得られた成果物（リサーチ結果または広告コピー）を、\n"
+            f"content_id='{content_id}' として DynamoDB Write Tool を使って保存してください。\n"
+            "保存が成功したことを確認してください。"
+        ),
+        expected_output=(
+            f"DynamoDB への保存成功メッセージ（content_id: {content_id} を含むこと）"
+        ),
+        agent=archivist,
+        context=context_tasks,
+    )
+    return task, archivist
+
+
+def create_read_task(content_id: str) -> tuple[Task, object]:
+    """
+    DynamoDB 読み取りタスクとアーキビストエージェントを生成して返す。
+    """
+    archivist = create_archivist_agent()
+    task = Task(
+        description=(
+            f"DynamoDB Read Tool を使用して、\n"
+            f"content_id='{content_id}' のレコードを取得してください。"
+        ),
+        expected_output=(
+            "取得したレコードの内容（content_id と content を含むこと）"
+        ),
+        agent=archivist,
+    )
+    return task, archivist
