@@ -12,7 +12,7 @@ from crew_app.tools import DuckDuckGoSearchTool, DynamoDBReadTool, DynamoDBWrite
 # デフォルト LLM を環境変数で切替可能にする
 DEFAULT_LLM = os.environ.get(
     "CREWAI_LLM_MODEL",
-    "bedrock/us.amazon.nova-micro-v1:0",
+    "bedrock/amazon.nova-micro-v1:0",
 )
 
 

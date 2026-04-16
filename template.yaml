@@ -31,7 +31,7 @@ Globals:
         SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
         HOME: /tmp
         SSM_PARAM_PREFIX: /handson/langfuse
-        CREWAI_LLM_MODEL: "bedrock/us.amazon.nova-micro-v1:0"
+        CREWAI_LLM_MODEL: "bedrock/amazon.nova-micro-v1:0"
 
 Resources:
   # 1. Lambda 関数の定義
@@ -59,8 +59,8 @@ Resources:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource:
-                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/us.amazon.nova-micro-v1:0"
-                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/us.amazon.nova-lite-v1:0"
+                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-micro-v1:0"
+                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0"
                 - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0"
             - Effect: Allow
               Action:
@@ -91,7 +91,7 @@ Resources:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/"
       Environment:
         Variables:
-          BEDROCK_MODEL_ID: "us.amazon.nova-micro-v1:0"
+          BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0"
           CHECKPOINT_TABLE: !Ref CheckpointTableName
           WRITES_TABLE: !Ref WritesTableName
           ARCHIVE_TABLE: !Ref ArchiveTableName
