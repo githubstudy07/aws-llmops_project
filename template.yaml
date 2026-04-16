@@ -15,7 +15,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 300
-    MemorySize: 2048
+    MemorySize: 512
     EphemeralStorage:
       Size: 1024
     LoggingConfig:
@@ -28,6 +28,7 @@ Globals:
         SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
         HOME: /tmp
         SSM_PARAM_PREFIX: /handson/langfuse
+        CREWAI_LLM_MODEL: "bedrock/amazon.nova-micro-v1:0"
 
 Resources:
   # 1. Lambda 関数の定義
@@ -54,7 +55,10 @@ Resources:
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
-              Resource: "*"
+              Resource:
+                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-micro-v1:0"
+                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0"
+                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0"
             - Effect: Allow
               Action:
                 - ssm:GetParameters

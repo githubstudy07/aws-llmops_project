@@ -105,7 +105,7 @@ def handler(event: dict, context: object) -> dict:
         if not topic:
             return _response(400, {"error": "topic is required."})
 
-        crew = build_crew()
+        crew = build_crew(topic=topic)
         result = crew.kickoff(inputs={"topic": topic})
 
         return _response(200, {"result": str(result)})

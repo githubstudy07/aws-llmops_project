@@ -1,43 +1,69 @@
 # File: crew_app/agents.py
+"""エージェント定義"""
+
+from __future__ import annotations
+
 import os
-from crewai import Agent, LLM
+from crewai import Agent
+
+from crew_app.tools import DuckDuckGoSearchTool
 
 
-def _bedrock_llm() -> LLM:
+# デフォルト LLM を環境変数で切替可能にする
+DEFAULT_LLM = os.environ.get(
+    "CREWAI_LLM_MODEL",
+    "bedrock/amazon.nova-micro-v1:0",
+)
+
+
+def make_researcher(*, llm: str | None = None) -> Agent:
+    """Researcher エージェントを生成する。
+
+    Args:
+        llm: 使用する LLM モデル名。None の場合は DEFAULT_LLM を使用。
+
+    Returns:
+        Web 検索ツール付きの Researcher Agent
     """
-    Amazon Bedrock Nova Micro を CrewAI LLM として返す。
-    """
-    return LLM(
-        model="bedrock/amazon.nova-micro-v1:0",
-        region_name=os.environ.get("AWS_REGION", "ap-northeast-1"),
+    search_tool = DuckDuckGoSearchTool(
+        max_results=5,
+        request_timeout=20,
+    )
+
+    resolved_llm = llm or DEFAULT_LLM
+
+    return Agent(
+        role="Senior Research Analyst",
+        goal=(
+            "Search the web for the most recent and accurate information "
+            "on a given topic and compile a comprehensive research report."
+        ),
+        backstory=(
+            "You are an expert researcher with deep experience in "
+            "finding, verifying, and synthesizing information from "
+            "multiple web sources. You always cite your sources."
+        ),
+        tools=[search_tool],
+        llm=resolved_llm,
+        verbose=True,
+        allow_delegation=False,
+        # Nova Micro 向け: 最大反復回数を制限して暴走を防止
+        max_iter=10,
     )
 
 
-def make_researcher() -> Agent:
-    llm = _bedrock_llm()
+def make_copywriter(*, llm: str | None = None) -> Agent:
+    """Copywriter エージェントを生成する。"""
+    resolved_llm = llm or DEFAULT_LLM
     return Agent(
-        role="シニア・リサーチャー",
-        goal="指定されたトピックについて徹底的に調査し、正確な情報を収集する",
+        role="Pro Copywriter",
+        goal="Based on the researcher's findings, write high-quality content that engages the reader.",
         backstory=(
-            "あなたは 10 年以上の経験を持つシニア・リサーチャーです。"
-            "複雑なトピックを分析し、重要なインサイトを抽出することに長けています。"
+            "You are a copywriter familiar with both SEO and reader engagement. "
+            "Convert the given information into clear and attractive text."
         ),
-        llm=llm,
-        verbose=False,
+        llm=resolved_llm,
+        verbose=True,
         allow_delegation=False,
-    )
-
-
-def make_copywriter() -> Agent:
-    llm = _bedrock_llm()
-    return Agent(
-        role="プロ・コピーライター",
-        goal="リサーチャーの調査結果を元に、読者を引きつける高品質なコンテンツを執筆する",
-        backstory=(
-            "あなたは SEO と読者エンゲージメントの両面に精通したコピーライターです。"
-            "与えられた情報を分かりやすく魅力的な文章に変換します。"
-        ),
-        llm=llm,
-        verbose=False,
-        allow_delegation=False,
+        max_iter=10,
     )

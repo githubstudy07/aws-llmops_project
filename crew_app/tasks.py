@@ -1,42 +1,67 @@
 # File: crew_app/tasks.py
-from crewai import Task
-from crew_app.agents import make_researcher, make_copywriter
+"""タスク定義"""
+
+from __future__ import annotations
+
+from crewai import Agent, Task
 
 
-def make_research_task(researcher) -> Task:
+def make_research_task(*, agent: Agent, topic: str) -> Task:
+    """リサーチタスクを生成する。
+
+    Args:
+        agent: 担当エージェント
+        topic: 調査テーマ
+
+    Returns:
+        Task オブジェクト
+    """
     return Task(
         description=(
-            "以下のトピックについて包括的な調査を行ってください。\n"
-            "トピック: {topic}\n\n"
-            "- 主要な事実と統計を収集する\n"
-            "- 信頼できる情報源を特定する\n"
-            "- 重要なトレンドや洞察をまとめる"
+            f"Conduct thorough research on the following topic: '{topic}'.\n\n"
+            "You MUST follow these steps exactly:\n\n"
+            "Step 1: Use the 'DuckDuckGo Search Tool' to search for the topic.\n"
+            "  - To use the tool, provide a search query as input.\n"
+            "Step 2: Read the search results carefully.\n"
+            "Step 3: Use the 'DuckDuckGo Search Tool' again with a different "
+            "query to find additional perspectives.\n"
+            "Step 4: Synthesize all findings into a structured report.\n\n"
+            "IMPORTANT: You MUST use the search tool at least 2 times "
+            "before writing the final report.\n"
         ),
         expected_output=(
-            "調査レポート（日本語）:\n"
-            "- 主要なポイントを箇条書きで 5 点以上\n"
-            "- 各ポイントの根拠となる情報を含む"
+            "A research report in the following exact format:\n\n"
+            "## Executive Summary\n"
+            "(2-3 sentences summarizing the key findings)\n\n"
+            "## Key Findings\n"
+            "- Finding 1 (Source: URL)\n"
+            "- Finding 2 (Source: URL)\n"
+            "- Finding 3 (Source: URL)\n\n"
+            "## Detailed Analysis\n"
+            "(3-5 paragraphs with detailed analysis)\n\n"
+            "## Conclusion\n"
+            "(2-3 sentences with recommendations)\n"
         ),
-        agent=researcher,
+        agent=agent,
     )
 
 
-def make_writing_task(copywriter, research_task: Task) -> Task:
+def make_writing_task(*, agent: Agent, research_task: Task, topic: str) -> Task:
+    """執筆タスクを生成する。"""
     return Task(
         description=(
-            "リサーチャーの調査結果を元に、以下のトピックに関する記事を執筆してください。\n"
-            "トピック: {topic}\n\n"
-            "- 読者の興味を引くタイトルと導入文\n"
-            "- 調査結果を分かりやすく構造化した本文\n"
-            "- 読者へのアクションを促す結論"
+            f"Based on the researcher's findings, write a high-quality article on the topic: '{topic}'.\n\n"
+            "- Engaging title and introduction\n"
+            "- Structured body based on research findings\n"
+            "- Conclusion with a call to action"
         ),
         expected_output=(
-            "完成記事（日本語・Markdown 形式）:\n"
-            "- タイトル\n"
-            "- 導入 (200 字以上)\n"
-            "- 本文 (セクション 3 つ以上)\n"
-            "- 結論"
+            "Completed article (Japanese, Markdown format):\n"
+            "- Title\n"
+            "- Introduction (200+ characters)\n"
+            "- Body (3+ sections)\n"
+            "- Conclusion"
         ),
-        agent=copywriter,
+        agent=agent,
         context=[research_task],
     )
