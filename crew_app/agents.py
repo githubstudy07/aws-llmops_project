@@ -34,7 +34,7 @@ def make_researcher(*, llm: str | None = None) -> Agent:
         ),
         tools=[DuckDuckGoSearchTool()],
         llm=resolved_llm,
-        verbose=True,
+        verbose=False,
         # Nova Micro 向け: 最大反復回数を制限して暴走を防止
         max_iter=3,
         max_retry_limit=1,
@@ -53,7 +53,7 @@ def make_copywriter(*, llm: str | None = None) -> Agent:
             "Convert the given information into clear and attractive text."
         ),
         llm=resolved_llm,
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
         max_iter=3,
     )
@@ -75,7 +75,7 @@ def make_archivist(*, llm: str | None = None) -> Agent:
         ),
         llm=resolved_llm,
         tools=[DynamoDBWriteTool(), DynamoDBReadTool()],
-        verbose=True,
+        verbose=False,
         allow_delegation=False,
         max_iter=3,
     )

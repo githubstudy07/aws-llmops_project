@@ -38,6 +38,6 @@ def build_crew(topic: str = "latest AI tools 2026", content_id: str | None = Non
         agents=[researcher, copywriter, archivist],
         tasks=[research_task, writing_task, archive_task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
         memory=False,
     )

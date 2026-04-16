@@ -31,6 +31,7 @@ Globals:
         SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
         HOME: /tmp
         SSM_PARAM_PREFIX: /handson/langfuse
+        PYTHONUTF8: "1"
         CREWAI_LLM_MODEL: "bedrock/amazon.nova-micro-v1:0"
 
 Resources:
