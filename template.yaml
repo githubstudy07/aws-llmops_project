@@ -24,7 +24,7 @@ Globals:
         HOME: /tmp
         SSM_PARAM_PREFIX: /handson/langfuse
         PYTHONUTF8: "1"
-        CREWAI_LLM_MODEL: "bedrock/us.amazon.nova-micro-v1:0"
+        CREWAI_LLM_MODEL: "bedrock/amazon.nova-micro-v1:0"
 
 Resources:
   # 1. Lambda 関数の定義
@@ -48,7 +48,7 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          BEDROCK_MODEL_ID: "us.amazon.nova-micro-v1:0"
+          BEDROCK_MODEL_ID: "amazon.nova-micro-v1:0"
           # ★ Phase 9-2: テーブル名を CloudFormation 参照で設定
           WRITES_TABLE: !Ref ResearchArchivesTable
           LANGFUSE_HOST: "https://cloud.langfuse.com"

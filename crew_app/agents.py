@@ -23,7 +23,7 @@ def _get_llm() -> LLM:
     Bedrock Nova Micro を使用する LLM インスタンスを返す。
     モデル ID は環境変数から取得。
     """
-    model_id = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-micro-v1:0")
+    model_id = os.environ.get("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
     return LLM(
         model=f"bedrock/{model_id}",
         temperature=0.3,
