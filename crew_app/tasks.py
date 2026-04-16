@@ -1,78 +1,44 @@
 # File: crew_app/tasks.py
-"""タスク定義 — Phase 9-1 & 9-2."""
-
-from __future__ import annotations
+"""
+CrewAI タスク定義
+Phase 9-2: アーカイブタスクを追加
+"""
 
 from crewai import Task
+from crew_app.agents import create_researcher_agent, create_archivist_agent
 
 
-def make_research_task(agent, topic: str) -> Task:
-    """Web 検索を活用した調査タスクを生成する。"""
+def create_research_task(topic: str) -> Task:
+    """
+    リサーチタスク: 指定トピックについて調査レポートを作成する。
+    """
     return Task(
         description=(
-            f"Research the topic: '{topic}'.\n"
-            "You MUST use the duckduckgo_search tool at least once to find current information.\n"
-            "Collect key facts, recent developments, and relevant data.\n"
-            "Organize findings in a structured format."
+            f"以下のトピックについて調査し、要点を日本語で簡潔にまとめてください。\n"
+            f"トピック: {topic}\n"
+            f"回答は300文字以内で、箇条書きを含めてください。"
         ),
-        expected_output=(
-            "A structured report containing:\n"
-            "1) 3-5 key facts (bullet points)\n"
-            "2) Recent developments\n"
-            "3) Eventual sources/URLs found during search"
-        ),
-        agent=agent,
+        expected_output="トピックに関する簡潔な調査レポート（日本語・300文字以内・箇条書き含む）",
+        agent=create_researcher_agent(),
     )
 
 
-def make_writing_task(agent, research_task: Task, topic: str) -> Task:
-    """調査結果を元にしたライティングタスクを生成する。"""
+def create_archive_task(topic: str) -> Task:
+    """
+    アーカイブタスク: リサーチ結果を DynamoDB に保存する。
+    前タスクの出力を受け取り、DynamoDB に書き込む。
+    """
+    # content_id 用にトピックをサニタイズ
+    safe_topic = topic[:20].replace(" ", "-").replace("/", "-").lower()
+
     return Task(
         description=(
-            f"Using the research findings provided for the topic '{topic}', "
-            "write a concise summary (200 words maximum). "
-            "Focus on accuracy and clarity. Do not fabricate information."
+            f"前のタスクで得られたリサーチ結果を DynamoDB に保存してください。\n"
+            f"dynamodb_write ツールを使用し、以下のパラメータで保存してください:\n"
+            f"- content_id: 'research-{safe_topic}'\n"
+            f"- content: 前のタスクのリサーチ結果全文\n"
+            f"保存が完了したら、使用した content_id を報告してください。"
         ),
-        expected_output="A well-written summary of approximately 150-200 words.",
-        agent=agent,
-        context=[research_task],
-    )
-
-
-def make_archive_task(agent, content_id: str, context_task: Task) -> Task:
-    """成果物を DynamoDB に保存するタスクを生成する。"""
-    return Task(
-        description=(
-            f"Save the output of the previous task to DynamoDB archive.\n\n"
-            f"【Procedure】\n"
-            f"1. Use the 'dynamodb_write' tool.\n"
-            f"2. Set 'content_id' to '{content_id}'.\n"
-            f"3. Set 'content' to the FULL text from the previous task.\n"
-            f"4. Confirm that the data was successfully saved.\n\n"
-            "You MUST use the dynamodb_write tool."
-        ),
-        expected_output=(
-            f"Final confirmation message stating the data was saved with content_id='{content_id}'."
-        ),
-        agent=agent,
-        context=[context_task],
-    )
-
-
-def make_retrieve_task(agent, content_id: str) -> Task:
-    """DynamoDB から過去の成果物を取得するタスクを生成する。"""
-    return Task(
-        description=(
-            f"Retrieve a previously saved report from DynamoDB.\n\n"
-            f"【Procedure】\n"
-            f"1. Use the 'dynamodb_read' tool.\n"
-            f"2. Set 'content_id' to '{content_id}'.\n"
-            f"3. Summarize the retrieved content.\n\n"
-            "You MUST use the dynamodb_read tool."
-        ),
-        expected_output=(
-            f"A summary of the record found with content_id='{content_id}', "
-            "or a message reporting that no record was found."
-        ),
-        agent=agent,
+        expected_output="DynamoDB への保存完了メッセージと使用した content_id",
+        agent=create_archivist_agent(),
     )

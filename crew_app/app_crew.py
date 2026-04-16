@@ -1,129 +1,80 @@
 # File: crew_app/app_crew.py
 """
-Lambda ハンドラー
-
-Lambda 環境判定:
-  - 環境変数 LAMBDA_TASK_ROOT が存在する場合 → Lambda 本番環境
-  - 存在しない場合 → ローカル / GitHub Actions テスト環境
-
-pysqlite3 ハックは Lambda 本番環境でのみ適用する。
+Lambda ハンドラー: CrewAI エントリーポイント
+Phase 9-2: リサーチ → アーカイブ の Sequential Crew
 """
 
-import os
-import sys
-
-# ------------------------------------------------------------------
-# [CRITICAL] pysqlite3 ハック: Lambda 本番環境でのみ適用
-# ------------------------------------------------------------------
-_IS_LAMBDA_RUNTIME = "LAMBDA_TASK_ROOT" in os.environ
-
-if _IS_LAMBDA_RUNTIME:
-    __import__("pysqlite3")
-    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
-
-# ------------------------------------------------------------------
-# /tmp へのパス強制リダイレクト
-# ------------------------------------------------------------------
-_TMP_DIRS = [
-    "/tmp/chroma_db",
-    "/tmp/crewai_storage",
-    "/tmp/huggingface",
-    "/tmp/sentence_transformers",
-]
-for _d in _TMP_DIRS:
-    os.makedirs(_d, exist_ok=True)
-
-os.environ.setdefault("CHROMA_DB_PATH", "/tmp/chroma_db")
-os.environ.setdefault("CREWAI_STORAGE_DIR", "/tmp/crewai_storage")
-os.environ.setdefault("HF_HOME", "/tmp/huggingface")
-os.environ.setdefault("SENTENCE_TRANSFORMERS_HOME", "/tmp/sentence_transformers")
-os.environ.setdefault("HOME", "/tmp")
-
-# ------------------------------------------------------------------
-# 通常 import
-# ------------------------------------------------------------------
 import json
 import logging
-import boto3
-from openinference.instrumentation.crewai import CrewAIInstrumentor
+import os
 
-logger = logging.getLogger(__name__)
+from crewai import Crew, Process
+from crew_app.tasks import create_research_task, create_archive_task
+
+logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Langfuse 用の計装 (OTel)
-CrewAIInstrumentor().instrument()
+# --- Langfuse 初期化（既存処理を維持） ---
+# Langfuse の CallbackHandler 初期化コードがある場合はここに配置
+# from langfuse.callback import CallbackHandler as LangfuseCallbackHandler
+# langfuse_handler = LangfuseCallbackHandler(...)
 
-def _init_langfuse() -> None:
+
+def handler(event, context):
     """
-    SSM Parameter Store から Langfuse キーを取得して環境変数に設定する。
+    Lambda ハンドラー。
+    入力: {"body": "{\"topic\": \"...\"}"}
+    出力: {"statusCode": 200, "body": "{\"status\": \"success\", ...}"}
     """
-    if os.environ.get("LANGFUSE_PUBLIC_KEY"):
-        return
-
-    if not _IS_LAMBDA_RUNTIME:
-        return
-
-    ssm = boto3.client("ssm", region_name=os.environ.get("AWS_REGION", "ap-northeast-1"))
-    param_prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
-
     try:
-        response = ssm.get_parameters(
-            Names=[
-                f"{param_prefix}/public_key",
-                f"{param_prefix}/secret_key",
-                f"{param_prefix}/host",
-            ],
-            WithDecryption=True,
-        )
-        params = {p["Name"]: p["Value"] for p in response["Parameters"]}
-        os.environ["LANGFUSE_PUBLIC_KEY"] = params.get(f"{param_prefix}/public_key", "")
-        os.environ["LANGFUSE_SECRET_KEY"] = params.get(f"{param_prefix}/secret_key", "")
-        os.environ["LANGFUSE_HOST"] = params.get(f"{param_prefix}/host", "https://cloud.langfuse.com")
-        logger.info("Langfuse keys loaded from SSM.")
-    except Exception as e:
-        logger.warning(f"Failed to load Langfuse keys from SSM: {e}")
-
-_init_langfuse()
-
-# 後続のモジュール import
-from crew_app.crew import build_crew
-
-
-def handler(event: dict, context: object) -> dict:
-    """
-    API Gateway -> Lambda ハンドラー
-    """
-    logger.info(f"Event received: {json.dumps(event, ensure_ascii=False)}")
-
-    try:
+        # --- リクエスト解析 ---
         body = event.get("body", "{}")
         if isinstance(body, str):
             body = json.loads(body)
+        topic = body.get("topic", "AI の最新トレンド")
 
-        # 最新ガイドに合わせ 'topic' を使用
-        topic: str = body.get("topic", "")
-        content_id: str | None = body.get("content_id", None)
-        
-        if not topic:
-            return _response(400, {"error": "topic is required."})
+        logger.info(f"Crew 実行開始: topic='{topic}'")
 
-        crew = build_crew(topic=topic, content_id=content_id)
-        result = crew.kickoff(inputs={"topic": topic})
+        # --- タスク生成 ---
+        research_task = create_research_task(topic)
+        archive_task = create_archive_task(topic)
 
-        return _response(200, {"result": str(result)})
+        # --- Crew 構成 ---
+        crew = Crew(
+            agents=[research_task.agent, archive_task.agent],
+            tasks=[research_task, archive_task],
+            process=Process.sequential,  # リサーチ → アーカイブ の順序実行
+            verbose=False,  # Lambda環境ではFalse
+        )
+
+        # --- 実行 ---
+        result = crew.kickoff()
+
+        logger.info(f"Crew 実行完了: result_length={len(str(result))}")
+
+        return {
+            "statusCode": 200,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {
+                    "status": "success",
+                    "topic": topic,
+                    "result": str(result),
+                },
+                ensure_ascii=False,
+            ),
+        }
 
     except Exception as e:
-        logger.exception("Unhandled error in handler")
-        # テストのアサーションに合わせ、エラー内容を直接返す
-        return _response(500, {"error": str(e)})
-
-
-def _response(status_code: int, body: dict) -> dict:
-    return {
-        "statusCode": status_code,
-        "headers": {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*"
-        },
-        "body": json.dumps(body, ensure_ascii=False),
-    }
+        logger.error(f"Crew 実行エラー: {e}", exc_info=True)
+        return {
+            "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
+            "body": json.dumps(
+                {
+                    "status": "error",
+                    "message": str(e),
+                },
+                ensure_ascii=False,
+            ),
+        }

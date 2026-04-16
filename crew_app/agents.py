@@ -1,81 +1,65 @@
 # File: crew_app/agents.py
-"""エージェント定義 — Phase 9-1 & 9-2."""
-
-from __future__ import annotations
+"""
+CrewAI エージェント定義
+Phase 9-2: アーキビストエージェントを追加
+"""
 
 import os
-
-from crewai import Agent
-
-from crew_app.tools import DuckDuckGoSearchTool, DynamoDBReadTool, DynamoDBWriteTool
-
-# デフォルト LLM を環境変数で切替可能にする
-DEFAULT_LLM = os.environ.get(
-    "CREWAI_LLM_MODEL",
-    "bedrock/us.amazon.nova-micro-v1:0",
-)
+from crewai import Agent, LLM
+from crew_app.tools import DynamoDBWriteTool, DynamoDBReadTool
 
 
-def make_researcher(*, llm: str | None = None) -> Agent:
-    """Researcher エージェントを生成する。"""
-    resolved_llm = llm or DEFAULT_LLM
-
-    return Agent(
-        role="Senior Research Analyst",
-        goal=(
-            "Search the web for the most recent and accurate information "
-            "on a given topic and compile a comprehensive research report."
-        ),
-        backstory=(
-            "You are an expert researcher with deep experience in "
-            "finding, verifying, and synthesizing information from "
-            "multiple web sources. You always use your search tool (duckduckgo_search) "
-            "to verify facts with current web sources."
-        ),
-        tools=[DuckDuckGoSearchTool()],
-        llm=resolved_llm,
-        verbose=False,
-        # Nova Micro 向け: 最大反復回数を制限して暴走を防止
-        max_iter=3,
-        max_retry_limit=1,
-        allow_delegation=False,
+def get_llm() -> LLM:
+    """
+    Bedrock LLM インスタンスを生成する。
+    環境変数 BEDROCK_MODEL_ID からモデルIDを取得。
+    """
+    model_id = os.environ.get("BEDROCK_MODEL_ID", "us.amazon.nova-micro-v1:0")
+    return LLM(
+        model=f"bedrock/{model_id}",
+        temperature=0.3,
     )
 
 
-def make_copywriter(*, llm: str | None = None) -> Agent:
-    """Copywriter エージェントを生成する。"""
-    resolved_llm = llm or DEFAULT_LLM
+def create_researcher_agent() -> Agent:
+    """
+    リサーチャーエージェント。
+    Phase 9-2 では検索ツールを除外（Lambda環境でのDuckDuckGo 403回避）。
+    自身の知識に基づいて回答する。
+    """
     return Agent(
-        role="Pro Copywriter",
-        goal="Based on the researcher's findings, write high-quality content that engages the reader.",
+        role="Senior Researcher",
+        goal="指定されたトピックについて、正確で有用な情報を整理して提供する",
         backstory=(
-            "You are a copywriter familiar with both SEO and reader engagement. "
-            "Convert the given information into clear and attractive text."
+            "あなたは経験豊富なリサーチャーです。"
+            "与えられたトピックについて、自身の知識に基づいて"
+            "簡潔かつ正確な調査レポートを作成してください。"
+            "外部検索ツールは現在利用できません。"
         ),
-        llm=resolved_llm,
-        verbose=False,
-        allow_delegation=False,
-        max_iter=3,
+        llm=get_llm(),
+        tools=[],  # Phase 9-2: 検索ツール除外（DuckDuckGo 403 回避）
+        verbose=False,  # Lambda環境ではFalse（エンコーディング問題回避）
+        max_iter=5,  # ループ防止（課金制御）
     )
 
 
-def make_archivist(*, llm: str | None = None) -> Agent:
-    """アーキビスト（記録係）エージェントを生成する。"""
-    resolved_llm = llm or DEFAULT_LLM
+def create_archivist_agent() -> Agent:
+    """
+    アーキビスト（記録係）エージェント。
+    DynamoDB への読み書きツールを使用して成果物を管理する。
+    """
     return Agent(
-        role="Data Archivist",
-        goal=(
-            "Accurately save research results and reports into DynamoDB "
-            "and retrieve past data as needed."
-        ),
+        role="Research Archivist",
+        goal="リサーチ結果を DynamoDB に正確に保存し、過去の成果物を検索・取得する",
         backstory=(
-            "You are a specialist in data archiving. You systematically organize "
-            "information and store it in persistent storage. You can also "
-            "efficiently search and retrieve previously stored data."
+            "あなたは成果物管理の専門家です。"
+            "リサーチャーから受け取った調査結果を、適切な識別子を付けて"
+            "データベースに保存します。"
+            "content_id は 'research-YYYYMMDD-連番' 形式で生成してください。"
+            "保存が完了したら、使用した content_id を必ず報告してください。"
         ),
-        llm=resolved_llm,
+        llm=get_llm(),
         tools=[DynamoDBWriteTool(), DynamoDBReadTool()],
         verbose=False,
-        allow_delegation=False,
-        max_iter=3,
+        max_iter=5,
     )

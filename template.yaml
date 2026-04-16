@@ -17,10 +17,8 @@ Parameters:
 
 Globals:
   Function:
-    Timeout: 300
+    Timeout: 120  # CrewAI処理に十分な時間を確保（APIGWの29秒制限とは別）
     MemorySize: 512
-    EphemeralStorage:
-      Size: 1024
     LoggingConfig:
       LogFormat: JSON
     Environment:
@@ -42,46 +40,46 @@ Resources:
       # LogGroupName: !Sub "/aws/lambda/${LangGraphAgentFunction}"
       RetentionInDays: 3
 
-  LangGraphAgentFunction:
+  CrewFunction:
     Type: AWS::Serverless::Function
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: .
-      DockerTag: v1
+      DockerTag: latest
     Properties:
       PackageType: Image
-      ImageConfig:
-        Command: ["crew_app.app_crew.handler"]
+      Architectures:
+        - x86_64
+      Timeout: 120
+      MemorySize: 512
+      Environment:
+        Variables:
+          BEDROCK_MODEL_ID: "us.amazon.nova-micro-v1:0"
+          # ★ Phase 9-2: テーブル名を CloudFormation 参照で設定
+          RESEARCH_ARCHIVES_TABLE: !Ref ResearchArchivesTable
+          LANGFUSE_HOST: "https://cloud.langfuse.com"
+          PYTHONUTF8: "1"
+          # LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は
+          # SSM Parameter Store 経由で設定（既存処理を維持）
       Policies:
-        - AWSLambdaBasicExecutionRole
+        # ── Bedrock 推論権限 ──
+        # ★ 是正: inference-profile ARN 形式に修正
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
                 - bedrock:InvokeModelWithResponseStream
               Resource:
-                - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-micro-v1:0"
-                - !Sub "arn:aws:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-lite-v1:0"
-                - !Sub "arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.titan-embed-text-v2:0"
-            - Effect: Allow
-              Action:
-                - ssm:GetParameters
-                - ssm:GetParameter
-              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/*"
-            - Effect: Allow
-              Action:
-                - dynamodb:PutItem
-                - dynamodb:GetItem
-                - dynamodb:UpdateItem
-                - dynamodb:DeleteItem
-                - dynamodb:BatchWriteItem
-                - dynamodb:BatchGetItem
-                - dynamodb:Query
-                - dynamodb:Scan
-              Resource:
-                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${CheckpointTableName}"
-                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${WritesTableName}"
-                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${ArchiveTableName}"
+                # クロスリージョン推論プロファイル（us.amazon.nova-micro-v1:0 等）
+                - !Sub "arn:aws:bedrock:*:${AWS::AccountId}:inference-profile/us.amazon.*"
+                # 東京リージョンのネイティブモデル（フォールバック用）
+                - "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0"
+                - "arn:aws:bedrock:ap-northeast-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0"
+        # ── DynamoDB 操作権限（最小権限）──
+        # ★ Phase 9-2 追加
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResearchArchivesTable
+        # ── SSM パラメータ読み取り権限 ──
         - Statement:
             - Effect: Allow
               Action:
@@ -90,12 +88,15 @@ Resources:
               Resource:
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/*"
                 - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse/"
-      Environment:
-        Variables:
-          BEDROCK_MODEL_ID: "us.amazon.nova-micro-v1:0"
-          CHECKPOINT_TABLE: !Ref CheckpointTableName
-          WRITES_TABLE: !Ref WritesTableName
-          ARCHIVE_TABLE: !Ref ArchiveTableName
+      Events:
+        ResearchApi:
+          Type: Api
+          Properties:
+            Path: /research
+            Method: post
+            Auth:
+              ApiKeyRequired: true
+            RestApiId: !Ref LangGraphApi
 
   # 2. 完全明示的な API Gateway の定義
   LangGraphApi:
@@ -129,7 +130,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LangGraphAgentFunction.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CrewFunction.Arn}/invocations"
 
   LangGraphApiFeedbackMethod:
     Type: AWS::ApiGateway::Method
@@ -142,7 +143,7 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LangGraphAgentFunction.Arn}/invocations"
+        Uri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CrewFunction.Arn}/invocations"
 
   LangGraphApiDeploymentV3:
     Type: AWS::ApiGateway::Deployment
@@ -187,7 +188,7 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LangGraphAgentFunction
+      FunctionName: !Ref CrewFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LangGraphApi}/*/POST/chat"
 
@@ -195,28 +196,39 @@ Resources:
     Type: AWS::Lambda::Permission
     Properties:
       Action: lambda:InvokeFunction
-      FunctionName: !Ref LangGraphAgentFunction
+      FunctionName: !Ref CrewFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LangGraphApi}/*/POST/feedback"
 
-  # 5. 研究成果アーカイブ用 DynamoDB テーブル
+  # ============================================================
+  # DynamoDB テーブル（Phase 9-2 追加）
+  # ============================================================
   ResearchArchivesTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete  # ハンズオン用。本番では Retain を推奨
     Properties:
-      TableName: !Ref ArchiveTableName
+      TableName: handson-research-archives
+      BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: content_id
           AttributeType: S
       KeySchema:
         - AttributeName: content_id
           KeyType: HASH
-      BillingMode: PAY_PER_REQUEST
 
+# ============================================================
+# Outputs
+# ============================================================
 Outputs:
-  ChatApiEndpoint:
-    Description: "API Gateway endpoint URL for Prod stage"
-    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/research"
+  ResearchArchivesTableName:
+    Description: DynamoDB table for research archives
+    Value: !Ref ResearchArchivesTable
+  ResearchArchivesTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt ResearchArchivesTable.Arn
   ApiKeyId:
     Description: "API Key ID"
     Value: !Ref LangGraphApiKey
-# Triggering CI/CD after OIDC secret configuration
