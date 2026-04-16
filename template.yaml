@@ -96,64 +96,28 @@ Resources:
           Properties:
             Path: /chat
             Method: post
-            Auth:
-              ApiKeyRequired: true
             RestApiId: !Ref LangGraphApi
         ResearchApi:
           Type: Api
           Properties:
             Path: /research
             Method: post
-            Auth:
-              ApiKeyRequired: true
             RestApiId: !Ref LangGraphApi
 
   # -------------------------------------------------------
-  # 2. API Gateway の定義
+  # 2. API Gateway の定義 (SAM 管理 - AWS::Serverless::Api)
+  # ★ Fix: AWS::ApiGateway::RestApi から変更。SAM にメソッド/Deployment/Stage の
+  #   管理を委ねることで「no methods」エラーを解消。
   # -------------------------------------------------------
   LangGraphApi:
-    Type: AWS::ApiGateway::RestApi
+    Type: AWS::Serverless::Api
     Properties:
-      Name: LangGraphApi
-      Description: API for CrewAI Agent (Phase 9-2 Corrected)
-
-  # -------------------------------------------------------
-  # 3. 認証・認可 (API Key & Usage Plan)
-  # -------------------------------------------------------
-  LangGraphApiKey:
-    Type: AWS::ApiGateway::ApiKey
-    Properties:
-      Name: LangGraphAgentKey
-      Enabled: true
-
-  LangGraphUsagePlan:
-    Type: AWS::ApiGateway::UsagePlan
-    Properties:
-      UsagePlanName: LangGraphUsagePlan
-      ApiStages:
-        - ApiId: !Ref LangGraphApi
-          Stage: !Ref LangGraphApiProdStage
-
-  LangGraphApiProdStage:
-    Type: AWS::ApiGateway::Stage
-    Properties:
-      RestApiId: !Ref LangGraphApi
-      DeploymentId: !Ref LangGraphApiDeployment
       StageName: Prod
-
-  LangGraphApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    DependsOn:
-      - CrewFunction
-    Properties:
-      RestApiId: !Ref LangGraphApi
-
-  LangGraphUsagePlanKey:
-    Type: AWS::ApiGateway::UsagePlanKey
-    Properties:
-      KeyId: !Ref LangGraphApiKey
-      KeyType: API_KEY
-      UsagePlanId: !Ref LangGraphUsagePlan
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          UsagePlanName: LangGraphUsagePlan
 
   # -----------------------------------------------------------
   # 4. DynamoDB テーブル（Phase 9-2）
@@ -180,12 +144,15 @@ Outputs:
   ApiEndpoint:
     Description: "API Root Endpoint (SAM Managed)"
     Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  ChatApiEndpoint:
+    Description: "Chat API Endpoint"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
+  ResearchApiEndpoint:
+    Description: "Research API Endpoint"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/research"
   ResearchArchivesTableName:
     Description: DynamoDB table for research archives
     Value: !Ref ResearchArchivesTable
   ResearchArchivesTableArn:
     Description: DynamoDB table ARN
     Value: !GetAtt ResearchArchivesTable.Arn
-  ApiKeyId:
-    Description: "API Key ID"
-    Value: !Ref LangGraphApiKey
