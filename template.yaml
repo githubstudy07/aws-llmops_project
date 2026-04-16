@@ -13,7 +13,7 @@ Parameters:
     Default: handson-langgraph-writes
   ArchiveTableName:
     Type: String
-    Default: handson-research-archives
+    Default: handson-research-archives-v2
 
 Globals:
   Function:
