@@ -116,7 +116,7 @@ Resources:
         ApiKeyRequired: true
         UsagePlan:
           CreateUsagePlan: PER_API
-          UsagePlanName: LangGraphUsagePlan
+          UsagePlanName: LangGraphUsagePlanV10
 
   # -----------------------------------------------------------
   # 4. DynamoDB テーブル（Phase 9-2）
