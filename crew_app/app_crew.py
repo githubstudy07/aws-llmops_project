@@ -24,10 +24,10 @@ logger.setLevel(logging.INFO)
 def get_langfuse_handler(content_id: str):
     """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
     try:
-        # 検証済みの最新インポートパス
-        from langfuse import Langfuse, propagate_attributes
-        from langfuse.langchain import CallbackHandler
-
+        # Langfuse / OpenInference (OTel) の初期化
+        from langfuse.opentelemetry import register
+        from openinference.instrumentation.crewai import CrewAIInstrumentor
+        
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
         prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
         
@@ -40,14 +40,23 @@ def get_langfuse_handler(content_id: str):
         host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
         
         if pk and sk:
-            logger.info("Langfuse handler initialized via lazy import.")
-            # Langfuse クライアントを先に初期化
-            _ = Langfuse(public_key=pk, secret_key=sk, host=host)
-            # ハンドラーを初期化（シングルトンのクライアントが自動使用される）
-            return CallbackHandler()
+            # OpenTelemetry (OpenInference) を通じて Langfuse へ送信する設定
+            os.environ["LANGFUSE_PUBLIC_KEY"] = pk
+            os.environ["LANGFUSE_SECRET_KEY"] = sk
+            os.environ["LANGFUSE_HOST"] = host
+            
+            # Langfuse への自動エクスポート登録 (v4+)
+            register()
+            # CrewAI の自動計装
+            instrumentor = CrewAIInstrumentor()
+            if not instrumentor.is_instrumented_by_opentelemetry:
+                instrumentor.instrument()
+            
+            logger.info("Langfuse (OTel/OpenInference) instrumented successfully.")
+            return True
     except Exception as e:
-        logger.warning(f"Langfuse handler skipped: {str(e)}")
-    return None
+        logger.warning(f"Langfuse instrumentation failed: {str(e)}")
+    return False
 
 def lambda_handler(event: dict, context) -> dict:
     """
@@ -72,9 +81,8 @@ def lambda_handler(event: dict, context) -> dict:
 
         logger.info(f"Execution started. mode={mode}, topic={topic}, content_id={content_id}")
 
-        # Langfuse Handler の準備
-        langfuse_handler = get_langfuse_handler(content_id)
-        callbacks = [langfuse_handler] if langfuse_handler else []
+        # Langfuse 監視の有効化 (OTel)
+        langfuse_enabled = get_langfuse_handler(content_id)
 
         if mode == "read":
             # 読み取りモード
@@ -101,7 +109,9 @@ def lambda_handler(event: dict, context) -> dict:
         # Crew 実行 (callbacks を渡す)
         from langfuse import propagate_attributes
         with propagate_attributes(session_id=content_id):
-            result = crew.kickoff(callbacks=callbacks) if callbacks else crew.kickoff()
+            # CrewAI v1.x: kickoff() に callbacks 引数は存在しないため削除
+            # OTel Instrumentation により自動的にトレースが収集される
+            result = crew.kickoff()
 
         return {
             "statusCode": 200,
