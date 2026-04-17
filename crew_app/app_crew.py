@@ -35,18 +35,25 @@ def get_langfuse_handler(content_id: str):
         host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
         
         if pk and sk:
-            # LiteLLM (CrewAI 内部で使用) の Langfuse 連携を有効化
+            import langfuse
+            # LiteLLM 内部のバージョンチェック（langfuse.version）の不備を回避するためのパッチ
+            if not hasattr(langfuse, "version"):
+                class LangfuseVersion:
+                    __version__ = getattr(langfuse, "__version__", "4.3.1")
+                langfuse.version = LangfuseVersion
+                logger.info(f"Patched langfuse version attribute for LiteLLM compatibility.")
+
             import litellm
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
-            # 修正: 'langfuse' は SDK バージョンの不整合で AttributeError を起こすため、
-            # より堅牢な 'langfuse_otel' (OpenTelemetry ベース) を使用する。
-            # litellm.callbacks プロパティで一括設定。
-            litellm.callbacks = ["langfuse_otel"]
+            # success_callback に "langfuse" を追加することで自動トレースを有効化
+            # (パッチにより AttributeError が解消される)
+            if "langfuse" not in litellm.success_callback:
+                litellm.success_callback.append("langfuse")
             
-            logger.info("Langfuse (LiteLLM OTEL callback) enabled successfully.")
+            logger.info("Langfuse (LiteLLM callback with monkey-patch) enabled successfully.")
             return True
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
