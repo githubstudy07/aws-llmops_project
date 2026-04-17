@@ -35,24 +35,17 @@ def get_langfuse_handler(content_id: str):
         host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
         
         if pk and sk:
-            import langfuse
-            # LiteLLM 内部のバージョンチェック（langfuse.version）の不備を回避するためのパッチ
-            if not hasattr(langfuse, "version"):
-                class LangfuseVersion:
-                    __version__ = getattr(langfuse, "__version__", "3.0.0")
-                langfuse.version = LangfuseVersion
-                logger.info(f"Patched langfuse version attribute for v3 compatibility.")
-
             import litellm
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
-            # success_callback に "langfuse" を追加することで自動トレースを有効化
-            if "langfuse" not in litellm.success_callback:
-                litellm.success_callback.append("langfuse")
+            # success_callback に "langfuse_otel" を追加することで自動トレースを有効化
+            # Langfuse SDK v4+ に推奨される方式
+            if "langfuse_otel" not in litellm.success_callback:
+                litellm.success_callback.append("langfuse_otel")
             
-            logger.info("Langfuse (LiteLLM callback) enabled successfully.")
+            logger.info("Langfuse (LiteLLM OTEL callback) enabled successfully.")
             return True
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
