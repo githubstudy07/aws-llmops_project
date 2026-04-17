@@ -36,12 +36,16 @@ def get_langfuse_handler(content_id: str):
         
         if pk and sk:
             import langfuse
+            # 実バージョン報告 (デバッグ用)
+            lf_version = getattr(langfuse, "__version__", "unknown")
+            logger.info(f"Langfuse SDK version: {lf_version}")
+
             # LiteLLM 内部のバージョンチェック（langfuse.version）の不備を回避するためのパッチ
             if not hasattr(langfuse, "version"):
                 class LangfuseVersion:
-                    __version__ = getattr(langfuse, "__version__", "4.3.1")
+                    __version__ = lf_version
                 langfuse.version = LangfuseVersion
-                logger.info(f"Patched langfuse version attribute for LiteLLM compatibility.")
+                logger.info(f"Patched langfuse.version with {lf_version} for LiteLLM compatibility.")
 
             import litellm
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
@@ -49,11 +53,10 @@ def get_langfuse_handler(content_id: str):
             os.environ["LANGFUSE_HOST"] = host
             
             # success_callback に "langfuse" を追加することで自動トレースを有効化
-            # (パッチにより AttributeError が解消される)
             if "langfuse" not in litellm.success_callback:
                 litellm.success_callback.append("langfuse")
             
-            logger.info("Langfuse (LiteLLM callback with monkey-patch) enabled successfully.")
+            logger.info("Langfuse (LiteLLM callback) enabled successfully.")
             return True
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
