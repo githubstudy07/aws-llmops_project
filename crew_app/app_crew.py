@@ -41,11 +41,12 @@ def get_langfuse_handler(content_id: str):
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
-            # success_callback に "langfuse" を追加することで自動トレースを有効化
-            if "langfuse" not in litellm.success_callback:
-                litellm.success_callback.append("langfuse")
+            # 修正: 'langfuse' は SDK バージョンの不整合で AttributeError を起こすため、
+            # より堅牢な 'langfuse_otel' (OpenTelemetry ベース) を使用する。
+            # litellm.callbacks プロパティで一括設定。
+            litellm.callbacks = ["langfuse_otel"]
             
-            logger.info("Langfuse (LiteLLM callback) enabled successfully.")
+            logger.info("Langfuse (LiteLLM OTEL callback) enabled successfully.")
             return True
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
