@@ -2,6 +2,7 @@
 # テスト・開発用依存関係
 # 本番依存をすべて包含した上で、テスト用ライブラリを追加する
 
+# Busting cache: 2026-04-17 v2
 -r requirements.txt
 
 pytest>=8.0,<9.0
