@@ -13,8 +13,8 @@ Globals:
   Function:
     Timeout: 120  # CrewAI処理に十分な時間を確保（APIGWの29秒制限とは別）
     MemorySize: 512
-    LoggingConfig:
-      LogFormat: JSON
+
+
     Environment:
       Variables:
         CHROMA_DB_PATH: /tmp/chroma_db
@@ -31,7 +31,7 @@ Resources:
   LangGraphAgentFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      # LogGroupName: !Sub "/aws/lambda/${LangGraphAgentFunction}"
+      LogGroupName: !Sub "/aws/lambda/handson-llmops-${AWS::StackName}-CrewFunction"
       RetentionInDays: 3
 
   CrewFunction:
@@ -46,15 +46,17 @@ Resources:
         - x86_64
       Timeout: 120
       MemorySize: 512
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: INFO
+        LogGroup: !Ref LangGraphAgentFunctionLogGroup
       Environment:
         Variables:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
-          # ★ Phase 9-2: テーブル名を CloudFormation 参照で設定
           WRITES_TABLE: !Ref ResearchArchivesTable
           LANGFUSE_HOST: "https://cloud.langfuse.com"
           PYTHONUTF8: "1"
-          # LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY は
-          # SSM Parameter Store 経由で設定
       Policies:
         # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)
         - AWSLambdaBasicExecutionRole
