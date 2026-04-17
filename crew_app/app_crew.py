@@ -24,11 +24,8 @@ logger.setLevel(logging.INFO)
 def get_langfuse_handler(content_id: str):
     """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
     try:
-        # 遅延インポート: トップレベルを避けることでテストやロードエラーを防止
-        try:
-            from langfuse.callback import CallbackHandler
-        except ImportError:
-            from langfuse.langchain import CallbackHandler
+        # 検証済みの最新インポートパス
+        from langfuse.langchain import CallbackHandler
 
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
         prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
