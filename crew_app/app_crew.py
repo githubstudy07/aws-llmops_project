@@ -36,16 +36,12 @@ def get_langfuse_handler(content_id: str):
         
         if pk and sk:
             import langfuse
-            # 実バージョン報告 (デバッグ用)
-            lf_version = getattr(langfuse, "__version__", "unknown")
-            logger.info(f"Langfuse SDK version: {lf_version}")
-
             # LiteLLM 内部のバージョンチェック（langfuse.version）の不備を回避するためのパッチ
             if not hasattr(langfuse, "version"):
                 class LangfuseVersion:
-                    __version__ = lf_version
+                    __version__ = getattr(langfuse, "__version__", "3.0.0")
                 langfuse.version = LangfuseVersion
-                logger.info(f"Patched langfuse.version with {lf_version} for LiteLLM compatibility.")
+                logger.info(f"Patched langfuse version attribute for v3 compatibility.")
 
             import litellm
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
