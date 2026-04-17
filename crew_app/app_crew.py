@@ -10,7 +10,7 @@ import uuid
 import logging
 import boto3
 from crewai import Crew, Process
-from langfuse.callback import CallbackHandler
+from langfuse.langchain import CallbackHandler
 
 from crew_app.tasks import (
     create_research_task,
