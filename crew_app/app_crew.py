@@ -22,16 +22,11 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 def get_langfuse_handler(content_id: str):
-    """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
+    """SSM からキーを取得し、Langfuse (LiteLLM) 連携を有効化する"""
     try:
-        # Langfuse / OpenInference (OTel) の初期化
-        from langfuse.opentelemetry import register
-        from openinference.instrumentation.crewai import CrewAIInstrumentor
-        
+        # SSM からパラメータ取得
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
         prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
-        
-        # SSM からパラメータ取得
         params = ssm.get_parameters_by_path(Path=prefix, WithDecryption=True)
         param_dict = {p["Name"].split("/")[-1]: p["Value"] for p in params["Parameters"]}
         
@@ -40,22 +35,20 @@ def get_langfuse_handler(content_id: str):
         host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
         
         if pk and sk:
-            # OpenTelemetry (OpenInference) を通じて Langfuse へ送信する設定
+            # LiteLLM (CrewAI 内部で使用) の Langfuse 連携を有効化
+            import litellm
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
-            # Langfuse への自動エクスポート登録 (v4+)
-            register()
-            # CrewAI の自動計装
-            instrumentor = CrewAIInstrumentor()
-            if not instrumentor.is_instrumented_by_opentelemetry:
-                instrumentor.instrument()
+            # success_callback に "langfuse" を追加することで自動トレースを有効化
+            if "langfuse" not in litellm.success_callback:
+                litellm.success_callback.append("langfuse")
             
-            logger.info("Langfuse (OTel/OpenInference) instrumented successfully.")
+            logger.info("Langfuse (LiteLLM callback) enabled successfully.")
             return True
     except Exception as e:
-        logger.warning(f"Langfuse instrumentation failed: {str(e)}")
+        logger.warning(f"Langfuse enablement failed: {str(e)}")
     return False
 
 def lambda_handler(event: dict, context) -> dict:
@@ -109,8 +102,7 @@ def lambda_handler(event: dict, context) -> dict:
         # Crew 実行 (callbacks を渡す)
         from langfuse import propagate_attributes
         with propagate_attributes(session_id=content_id):
-            # CrewAI v1.x: kickoff() に callbacks 引数は存在しないため削除
-            # OTel Instrumentation により自動的にトレースが収集される
+            # CrewAI v1.x: LiteLLM callback により自動的にトレースが収集される
             result = crew.kickoff()
 
         return {
