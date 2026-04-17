@@ -10,7 +10,6 @@ import uuid
 import logging
 import boto3
 from crewai import Crew, Process
-from langfuse.langchain import CallbackHandler
 
 from crew_app.tasks import (
     create_research_task,
@@ -25,10 +24,16 @@ logger.setLevel(logging.INFO)
 def get_langfuse_handler(content_id: str):
     """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
     try:
+        # 遅延インポート: トップレベルを避けることでテストやロードエラーを防止
+        try:
+            from langfuse.callback import CallbackHandler
+        except ImportError:
+            from langfuse.langchain import CallbackHandler
+
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
         prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
         
-        # Get parameters from SSM
+        # SSM からパラメータ取得
         params = ssm.get_parameters_by_path(Path=prefix, WithDecryption=True)
         param_dict = {p["Name"].split("/")[-1]: p["Value"] for p in params["Parameters"]}
         
@@ -37,7 +42,7 @@ def get_langfuse_handler(content_id: str):
         host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
         
         if pk and sk:
-            logger.info("Langfuse handler initialized.")
+            logger.info("Langfuse handler initialized via lazy import.")
             return CallbackHandler(
                 public_key=pk,
                 secret_key=sk,
@@ -45,7 +50,7 @@ def get_langfuse_handler(content_id: str):
                 session_id=content_id
             )
     except Exception as e:
-        logger.warning(f"Failed to initialize Langfuse handler: {str(e)}")
+        logger.warning(f"Langfuse handler skipped: {str(e)}")
     return None
 
 def lambda_handler(event: dict, context) -> dict:
