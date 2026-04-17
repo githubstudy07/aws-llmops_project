@@ -8,7 +8,9 @@ import json
 import os
 import uuid
 import logging
+import boto3
 from crewai import Crew, Process
+from langfuse.callback import CallbackHandler
 
 from crew_app.tasks import (
     create_research_task,
@@ -19,6 +21,32 @@ from crew_app.tasks import (
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+def get_langfuse_handler(content_id: str):
+    """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
+    try:
+        ssm = boto3.client("ssm", region_name="ap-northeast-1")
+        prefix = os.environ.get("SSM_PARAM_PREFIX", "/handson/langfuse")
+        
+        # Get parameters from SSM
+        params = ssm.get_parameters_by_path(Path=prefix, WithDecryption=True)
+        param_dict = {p["Name"].split("/")[-1]: p["Value"] for p in params["Parameters"]}
+        
+        pk = param_dict.get("public_key")
+        sk = param_dict.get("secret_key")
+        host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+        
+        if pk and sk:
+            logger.info("Langfuse handler initialized.")
+            return CallbackHandler(
+                public_key=pk,
+                secret_key=sk,
+                host=host,
+                session_id=content_id
+            )
+    except Exception as e:
+        logger.warning(f"Failed to initialize Langfuse handler: {str(e)}")
+    return None
 
 def lambda_handler(event: dict, context) -> dict:
     """
@@ -43,6 +71,10 @@ def lambda_handler(event: dict, context) -> dict:
 
         logger.info(f"Execution started. mode={mode}, topic={topic}, content_id={content_id}")
 
+        # Langfuse Handler の準備
+        langfuse_handler = get_langfuse_handler(content_id)
+        callbacks = [langfuse_handler] if langfuse_handler else []
+
         if mode == "read":
             # 読み取りモード
             read_task, archivist = create_read_task(content_id)
@@ -65,11 +97,15 @@ def lambda_handler(event: dict, context) -> dict:
                 verbose=False,
             )
 
-        result = crew.kickoff()
+        # Crew 実行 (callbacks を渡す)
+        result = crew.kickoff() if not callbacks else crew.kickoff(callbacks=callbacks)
 
         return {
             "statusCode": 200,
-            "headers": {"Content-Type": "application/json"},
+            "headers": {
+                "Content-Type": "application/json",
+                "X-Trace-Id": content_id # セッションIDをトレース識別子として返却
+            },
             "body": json.dumps(
                 {
                     "status": "success",
