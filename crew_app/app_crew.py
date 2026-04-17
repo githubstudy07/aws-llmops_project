@@ -25,6 +25,7 @@ def get_langfuse_handler(content_id: str):
     """SSM からキーを取得し、Langfuse Callback Handler を初期化する"""
     try:
         # 検証済みの最新インポートパス
+        from langfuse import Langfuse, propagate_attributes
         from langfuse.langchain import CallbackHandler
 
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
@@ -40,12 +41,10 @@ def get_langfuse_handler(content_id: str):
         
         if pk and sk:
             logger.info("Langfuse handler initialized via lazy import.")
-            return CallbackHandler(
-                public_key=pk,
-                secret_key=sk,
-                host=host,
-                session_id=content_id
-            )
+            # Langfuse クライアントを先に初期化
+            _ = Langfuse(public_key=pk, secret_key=sk, host=host)
+            # ハンドラーを初期化（シングルトンのクライアントが自動使用される）
+            return CallbackHandler()
     except Exception as e:
         logger.warning(f"Langfuse handler skipped: {str(e)}")
     return None
@@ -100,7 +99,9 @@ def lambda_handler(event: dict, context) -> dict:
             )
 
         # Crew 実行 (callbacks を渡す)
-        result = crew.kickoff() if not callbacks else crew.kickoff(callbacks=callbacks)
+        from langfuse import propagate_attributes
+        with propagate_attributes(session_id=content_id):
+            result = crew.kickoff(callbacks=callbacks) if callbacks else crew.kickoff()
 
         return {
             "statusCode": 200,
