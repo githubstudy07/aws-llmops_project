@@ -5,7 +5,7 @@ langchain-community>=0.1.0
 pysqlite3-binary==0.5.4
 boto3>=1.35.0
 langfuse>=4.3.1
-litellm>=1.78.0
+litellm==1.72.0
 openinference-instrumentation-crewai
 opentelemetry-exporter-otlp
 
