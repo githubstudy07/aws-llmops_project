@@ -38,7 +38,7 @@ jobs:
         run: |
           # LAMBDA_TASK_ROOT を明示的に unset してテスト環境を保証
           unset LAMBDA_TASK_ROOT
-          export PYTHONPATH=$PYTHONPATH:.
+          export PYTHONPATH=$PYTHONPATH:.:src
           pytest tests/ -v --tb=short
 
   # ------------------------------------------------------------------
