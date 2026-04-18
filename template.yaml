@@ -36,12 +36,10 @@ Resources:
 
   CrewFunction:
     Type: AWS::Serverless::Function
-    Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: .
-      DockerTag: latest
     Properties:
-      PackageType: Image
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.12
       Architectures:
         - x86_64
       Timeout: 120

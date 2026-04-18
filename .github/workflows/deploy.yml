@@ -9,7 +9,6 @@ on:
 env:
   AWS_REGION: ap-northeast-1
   SAM_STACK_NAME: handson-llmops-v10
-  ECR_REPOSITORY: crewai-lambda-app
 
 jobs:
   # ------------------------------------------------------------------
@@ -75,24 +74,7 @@ jobs:
       - name: Verify AWS credentials
         run: aws sts get-caller-identity
 
-      # ----------------------------------------------------------------
-      # ECR ログイン
-      # ----------------------------------------------------------------
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
 
-      # ----------------------------------------------------------------
-      # ECR リポジトリが存在しない場合は作成
-      # ----------------------------------------------------------------
-      - name: Create ECR repository if not exists
-        run: |
-          aws ecr describe-repositories \
-            --repository-names ${{ env.ECR_REPOSITORY }} \
-            --region ${{ env.AWS_REGION }} \
-          || aws ecr create-repository \
-            --repository-name ${{ env.ECR_REPOSITORY }} \
-            --region ${{ env.AWS_REGION }}
 
       # ----------------------------------------------------------------
       # SAM セットアップ
@@ -111,7 +93,7 @@ jobs:
       # SAM ビルド (Container Image)
       # ----------------------------------------------------------------
       - name: SAM Build
-        run: sam build --use-container
+        run: sam build
 
       # -------------------------------------------------------
       # デプロイ前: 残留 Log Group のクリーンアップ
@@ -146,7 +128,6 @@ jobs:
             --stack-name ${{ env.SAM_STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
-            --image-repository ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }} \
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --parameter-overrides Environment=production \
             --debug 2>&1 | tee sam_deploy.log

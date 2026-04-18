@@ -1,1 +1,0 @@
-# CrewAI Lambda App Package
