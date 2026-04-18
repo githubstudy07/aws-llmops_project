@@ -55,7 +55,7 @@ Resources:
         Variables:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
           WRITES_TABLE: !Ref ResearchArchivesTable
-          LANGFUSE_HOST: "https://cloud.langfuse.com"
+          LANGFUSE_HOST: "https://us.cloud.langfuse.com"
           PYTHONUTF8: "1"
       Policies:
         # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)

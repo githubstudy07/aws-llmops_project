@@ -32,7 +32,7 @@ def get_langfuse_handler(content_id: str):
         
         pk = param_dict.get("public_key")
         sk = param_dict.get("secret_key")
-        host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+        host = os.environ.get("LANGFUSE_HOST", "https://us.cloud.langfuse.com")
         
         if pk and sk:
             import litellm
