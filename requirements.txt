@@ -10,4 +10,4 @@ openinference-instrumentation-crewai
 opentelemetry-exporter-otlp-proto-http
 
 # --- Phase 9-1: Web Search Tool ---
-duckduckgo-search>=7.0.0,<8.0.0
+duckduckgo-search>=7.0.0,<9.0.0
