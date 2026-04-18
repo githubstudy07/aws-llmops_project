@@ -36,25 +36,34 @@ def get_langfuse_handler(content_id: str):
         
         if pk and sk:
             import litellm
+            from langfuse import Langfuse
+            
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
+            # 診断用: Langfuse クライアントで接続テスト
+            langfuse_client = Langfuse(public_key=pk, secret_key=sk, host=host)
+            if langfuse_client.auth_check():
+                logger.info(f"Langfuse Auth Check: SUCCESS (Host: {host})")
+            else:
+                logger.error(f"Langfuse Auth Check: FAILED. Please check if keys are for region: {host}")
+            
             # Langfuse SDK v4+ に推奨される方式 (OTEL integration)
-            # 従来の "langfuse" コールバックが混入すると sdk_integration 引数エラーが発生するため強制上書きする
             litellm.success_callback = ["langfuse_otel"]
             
             logger.info(f"Langfuse (LiteLLM OTEL callback) enabled. Current callbacks: {litellm.success_callback}")
-            return True
+            return langfuse_client
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
-    return False
+    return None
 
 def lambda_handler(event: dict, context) -> dict:
     """
     Lambda ハンドラー関数。
     API Gateway からの POST リクエストを処理する。
     """
+    langfuse_client = None
     try:
         # リクエストボディのパース
         body = event.get("body")
@@ -74,7 +83,7 @@ def lambda_handler(event: dict, context) -> dict:
         logger.info(f"Execution started. mode={mode}, topic={topic}, content_id={content_id}")
 
         # Langfuse 監視の有効化 (OTel)
-        langfuse_enabled = get_langfuse_handler(content_id)
+        langfuse_client = get_langfuse_handler(content_id)
 
         if mode == "read":
             # 読み取りモード
@@ -103,6 +112,11 @@ def lambda_handler(event: dict, context) -> dict:
         with propagate_attributes(session_id=content_id):
             # CrewAI v1.x: LiteLLM callback により自動的にトレースが収集される
             result = crew.kickoff()
+
+        # 結果を返す前に強制 Flush (Lambda の凍結対策)
+        if langfuse_client:
+            logger.info("Flushing Langfuse traces...")
+            langfuse_client.flush()
 
         return {
             "statusCode": 200,
