@@ -43,8 +43,12 @@ def archive_research_result(content: str, content_id: str = None) -> str:
         logger.error(f"Failed to archive to DynamoDB: {str(e)}")
         return f"ERROR: Failed to save to DynamoDB: {str(e)}"
 
-# Define Tools
-search_tool = DuckDuckGoSearchRun()
+# Tools definition
+def get_search_tool():
+    """Lazy initialize DuckDuckGoSearchRun to avoid import-time errors."""
+    return DuckDuckGoSearchRun()
+
+search_tool = get_search_tool()
 tools = [search_tool, archive_research_result]
 
 # Langfuse Key Fetcher (SSM)
