@@ -37,22 +37,48 @@ def get_langfuse_handler(content_id: str):
         if pk and sk:
             import litellm
             from langfuse import Langfuse
+            from opentelemetry import trace
+            from openinference.instrumentation.crewai import CrewAIInstrumentor
             
+            # 環境変数を設定（LiteLLM や OTel 連携が参照するため）
             os.environ["LANGFUSE_PUBLIC_KEY"] = pk
             os.environ["LANGFUSE_SECRET_KEY"] = sk
             os.environ["LANGFUSE_HOST"] = host
             
-            # 診断用: Langfuse クライアントで接続テスト
+            # 1. Langfuse v4 クライアントの初期化
+            # SDK v4 は内部で自動的に OTel TracerProvider を構成します。
             langfuse_client = Langfuse(public_key=pk, secret_key=sk, host=host)
+            
+            # 2. instrumentation の初期化 (Lambda 再利用時は一度だけ実行)
+            provider = trace.get_tracer_provider()
+            # 既に TracerProvider が構成済みか、インスツルメンテーション済みかをチェック
+            if not hasattr(provider, "add_span_processor"):
+                # NoOpProvider の場合、あるいは未初期化の場合
+                # 注意: Langfuse v4 は自動で provider をセットアップするため、
+                # ここに到達した時点で provider は sdk.trace.TracerProvider になっているはずです
+                logger.info("OTel provider initialized via Langfuse v4.")
+            
+            # 計装は一回のみ実行
+            try:
+                # 既に計装されているか判定するフラグ等の代わりに簡易的な重複排除
+                # CrewAIInstrumentor().instrument() は内部で冪等である場合が多いが
+                # ログ出力を制御
+                CrewAIInstrumentor().instrument()
+                logger.info("CrewAI instrumentation enabled.")
+            except Exception as ie:
+                logger.debug(f"Instrumentation skip/failed: {str(ie)}")
+            
+            # 診断用: 接続テスト
             if langfuse_client.auth_check():
                 logger.info(f"Langfuse Auth Check: SUCCESS (Host: {host})")
             else:
-                logger.error(f"Langfuse Auth Check: FAILED. Please check if keys are for region: {host}")
+                logger.error(f"Langfuse Auth Check: FAILED. Check keys for {host}")
             
-            # Langfuse SDK v4+ に推奨される方式 (OTEL integration)
+            # LiteLLM callback を OTel 経由に統一
+            litellm.callbacks = []
             litellm.success_callback = ["langfuse_otel"]
             
-            logger.info(f"Langfuse (LiteLLM OTEL callback) enabled. Current callbacks: {litellm.success_callback}")
+            logger.info("Langfuse (langfuse_otel) and OTel pipeline ready.")
             return langfuse_client
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
@@ -107,16 +133,35 @@ def lambda_handler(event: dict, context) -> dict:
                 verbose=False,
             )
 
-        # Crew 実行 (callbacks を渡す)
+        # Crew 実行
+        # Langfuse v4: OTel エクスポーターの設定と litellm callback により
+        # 自動的にトレースが収集される構成。
         from langfuse import propagate_attributes
         with propagate_attributes(session_id=content_id):
-            # CrewAI v1.x: LiteLLM callback により自動的にトレースが収集される
             result = crew.kickoff()
 
         # 結果を返す前に強制 Flush (Lambda の凍結対策)
         if langfuse_client:
             logger.info("Flushing Langfuse traces...")
             langfuse_client.flush()
+            
+        # LiteLLM のコールバックを明示的にフラッシュ
+        try:
+            import litellm
+            litellm.flush_callbacks()
+            logger.info("LiteLLM callbacks flushed.")
+        except Exception as e:
+            logger.warning(f"LiteLLM flush failed: {str(e)}")
+            
+        # OTel の バッチプロセッサを強制フラッシュ (最優先是正)
+        try:
+            from opentelemetry import trace
+            provider = trace.get_tracer_provider()
+            if hasattr(provider, 'force_flush'):
+                logger.info("Force flushing OTel TracerProvider...")
+                provider.force_flush(timeout_millis=30000)
+        except Exception as e:
+            logger.warning(f"OTel force_flush failed: {str(e)}")
 
         return {
             "statusCode": 200,

@@ -56,6 +56,9 @@ Resources:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
           WRITES_TABLE: !Ref ResearchArchivesTable
           LANGFUSE_HOST: "https://us.cloud.langfuse.com"
+          LANGFUSE_OTEL_HOST: "https://us.cloud.langfuse.com"
+          OTEL_EXPORTER_OTLP_ENDPOINT: "https://us.cloud.langfuse.com/api/public/otel"
+          LITELLM_LOG: "DEBUG"
           PYTHONUTF8: "1"
       Policies:
         # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)

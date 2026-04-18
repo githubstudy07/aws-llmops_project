@@ -7,7 +7,7 @@ boto3>=1.35.0
 langfuse>=4.3.1
 litellm==1.72.0
 openinference-instrumentation-crewai
-opentelemetry-exporter-otlp
+opentelemetry-exporter-otlp-proto-http
 
 # --- Phase 9-1: Web Search Tool ---
 duckduckgo-search>=7.0.0,<8.0.0
