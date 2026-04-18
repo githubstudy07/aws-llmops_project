@@ -1,40 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  aws-llmops-project
-  SAM Template for LangGraph AI Agent with Bedrock, DynamoDB, and Fully Explicit API Gateway Auth
-
-Parameters:
-  ProjectName:
-    Type: String
-    Default: handson-research-archives
+  LangGraph Restart - Minimal Agent Setup
 
 Globals:
   Function:
-    Timeout: 120  # CrewAI処理に十分な時間を確保（APIGWの29秒制限とは別）
+    Timeout: 120
     MemorySize: 512
 
-
-    Environment:
-      Variables:
-        CHROMA_DB_PATH: /tmp/chroma_db
-        CREWAI_STORAGE_DIR: /tmp/crewai_storage
-        HF_HOME: /tmp/huggingface
-        SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
-        HOME: /tmp
-        SSM_PARAM_PREFIX: /handson/langfuse
-        PYTHONUTF8: "1"
-        CREWAI_LLM_MODEL: "bedrock/apac.amazon.nova-micro-v1:0"
-
 Resources:
-  # 1. Lambda 関数の定義
-  LangGraphAgentFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/handson-llmops-${AWS::StackName}-CrewFunction"
-      RetentionInDays: 3
-
-  CrewFunction:
+  # Lambda Function
+  AgentFunction:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: src/
@@ -42,75 +18,27 @@ Resources:
       Runtime: python3.12
       Architectures:
         - x86_64
-      Timeout: 120
-      MemorySize: 512
-      LoggingConfig:
-        LogFormat: JSON
-        ApplicationLogLevel: INFO
-        SystemLogLevel: INFO
-        LogGroup: !Ref LangGraphAgentFunctionLogGroup
       Environment:
         Variables:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
-          WRITES_TABLE: !Ref ResearchArchivesTable
-          LANGFUSE_HOST: "https://us.cloud.langfuse.com"
-          LANGFUSE_OTEL_HOST: "https://us.cloud.langfuse.com"
-          OTEL_EXPORTER_OTLP_ENDPOINT: "https://us.cloud.langfuse.com/api/public/otel"
-          LITELLM_LOG: "DEBUG"
           PYTHONUTF8: "1"
       Policies:
-        # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)
         - AWSLambdaBasicExecutionRole
-        # ── Bedrock 推論権限 ──
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
-                - bedrock:InvokeModelWithResponseStream
-              Resource:
-                - "*"
-        # ── DynamoDB 操作権限（最小権限）──
-        - Statement:
-            - Effect: Allow
-              Action:
-                - dynamodb:GetItem
-                - dynamodb:PutItem
-                - dynamodb:UpdateItem
-                - dynamodb:DeleteItem
-                - dynamodb:Query
-                - dynamodb:Scan
-                - dynamodb:DescribeTable
-              Resource:
-                - !GetAtt ResearchArchivesTable.Arn
-                - !Sub "${ResearchArchivesTable.Arn}/index/*"
-        # ── SSM パラメータ読み取り権限 ──
-        - Statement:
-            - Effect: Allow
-              Action:
-                - ssm:GetParameter
-                - ssm:GetParametersByPath
-              Resource:
-                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse*"
+              Resource: "*"
       Events:
         ChatApi:
           Type: Api
           Properties:
             Path: /chat
             Method: post
-            RestApiId: !Ref LangGraphApi
-        ResearchApi:
-          Type: Api
-          Properties:
-            Path: /research
-            Method: post
-            RestApiId: !Ref LangGraphApi
+            RestApiId: !Ref RestartApi
 
-  # -------------------------------------------------------
-  # 2. API Gateway の定義 (SAM 管理 - AWS::Serverless::Api)
-  # ★ Fix: AWS::ApiGateway::RestApi から変更。SAM にメソッド/Deployment/Stage の
-  #   管理を委ねることで「no methods」エラーを解消。
-  # -------------------------------------------------------
-  LangGraphApi:
+  # API Gateway
+  RestartApi:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
@@ -118,42 +46,9 @@ Resources:
         ApiKeyRequired: true
         UsagePlan:
           CreateUsagePlan: PER_API
-          UsagePlanName: LangGraphUsagePlanV10
+          UsagePlanName: LangGraphRestartPlan
 
-  # -----------------------------------------------------------
-  # 4. DynamoDB テーブル（Phase 9-2）
-  # -----------------------------------------------------------
-  ResearchArchivesTable:
-    Type: AWS::DynamoDB::Table
-    DeletionPolicy: Delete
-    Properties:
-      # ★ Fix: 固定名から動的命名に変更し ResourceExistenceCheck を回避
-      #    例: handson-research-archives-handson-llmops-vfinal
-      TableName: !Sub "handson-research-archives-${AWS::StackName}"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: content_id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: content_id
-          KeyType: HASH
-
-# ============================================================
-# Outputs
-# ============================================================
 Outputs:
-  ApiEndpoint:
-    Description: "API Root Endpoint (SAM Managed)"
-    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
   ChatApiEndpoint:
     Description: "Chat API Endpoint"
-    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
-  ResearchApiEndpoint:
-    Description: "Research API Endpoint"
-    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/research"
-  ResearchArchivesTableName:
-    Description: DynamoDB table for research archives
-    Value: !Ref ResearchArchivesTable
-  ResearchArchivesTableArn:
-    Description: DynamoDB table ARN
-    Value: !GetAtt ResearchArchivesTable.Arn
+    Value: !Sub "https://${RestartApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
