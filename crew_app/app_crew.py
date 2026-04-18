@@ -21,8 +21,18 @@ from crew_app.tasks import (
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+# グローバル変数の定義（Lambda の実行コンテナ再利用対策）
+_LANGFUSE_CLIENT = None
+_INSTRUMENTED = False
+
 def get_langfuse_handler(content_id: str):
     """SSM からキーを取得し、Langfuse (LiteLLM) 連携を有効化する"""
+    global _LANGFUSE_CLIENT, _INSTRUMENTED
+    
+    # 既に初期化済みの場合は再利用
+    if _LANGFUSE_CLIENT:
+        return _LANGFUSE_CLIENT
+
     try:
         # SSM からパラメータ取得
         ssm = boto3.client("ssm", region_name="ap-northeast-1")
@@ -46,30 +56,26 @@ def get_langfuse_handler(content_id: str):
             os.environ["LANGFUSE_HOST"] = host
             
             # 1. Langfuse v4 クライアントの初期化
-            # SDK v4 は内部で自動的に OTel TracerProvider を構成します。
-            langfuse_client = Langfuse(public_key=pk, secret_key=sk, host=host)
+            # should_export_span=lambda span: True を指定し、
+            # v4 のスマートフィルタリング（AI スパン判定）をバイパスして全データを送信させる
+            _LANGFUSE_CLIENT = Langfuse(
+                public_key=pk, 
+                secret_key=sk, 
+                host=host,
+                should_export_span=lambda span: True
+            )
             
             # 2. instrumentation の初期化 (Lambda 再利用時は一度だけ実行)
-            provider = trace.get_tracer_provider()
-            # 既に TracerProvider が構成済みか、インスツルメンテーション済みかをチェック
-            if not hasattr(provider, "add_span_processor"):
-                # NoOpProvider の場合、あるいは未初期化の場合
-                # 注意: Langfuse v4 は自動で provider をセットアップするため、
-                # ここに到達した時点で provider は sdk.trace.TracerProvider になっているはずです
-                logger.info("OTel provider initialized via Langfuse v4.")
-            
-            # 計装は一回のみ実行
-            try:
-                # 既に計装されているか判定するフラグ等の代わりに簡易的な重複排除
-                # CrewAIInstrumentor().instrument() は内部で冪等である場合が多いが
-                # ログ出力を制御
-                CrewAIInstrumentor().instrument()
-                logger.info("CrewAI instrumentation enabled.")
-            except Exception as ie:
-                logger.debug(f"Instrumentation skip/failed: {str(ie)}")
+            if not _INSTRUMENTED:
+                try:
+                    CrewAIInstrumentor().instrument()
+                    _INSTRUMENTED = True
+                    logger.info("CrewAI instrumentation enabled (Global).")
+                except Exception as ie:
+                    logger.debug(f"Instrumentation skip/failed: {str(ie)}")
             
             # 診断用: 接続テスト
-            if langfuse_client.auth_check():
+            if _LANGFUSE_CLIENT.auth_check():
                 logger.info(f"Langfuse Auth Check: SUCCESS (Host: {host})")
             else:
                 logger.error(f"Langfuse Auth Check: FAILED. Check keys for {host}")
@@ -78,8 +84,8 @@ def get_langfuse_handler(content_id: str):
             litellm.callbacks = []
             litellm.success_callback = ["langfuse_otel"]
             
-            logger.info("Langfuse (langfuse_otel) and OTel pipeline ready.")
-            return langfuse_client
+            logger.info("Langfuse (langfuse_otel) and OTel pipeline ready with NO-FILTERING.")
+            return _LANGFUSE_CLIENT
     except Exception as e:
         logger.warning(f"Langfuse enablement failed: {str(e)}")
     return None
