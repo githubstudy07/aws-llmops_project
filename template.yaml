@@ -1,89 +1,159 @@
-AWSTemplateFormatVersion: "2010-09-09"
+AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: langgraph-chat-v58 (LangGraph 1.x + ECR Lifecycle + DynamoDB persistence)
+Description: >
+  aws-llmops-project
+  SAM Template for LangGraph AI Agent with Bedrock, DynamoDB, and Fully Explicit API Gateway Auth
 
 Parameters:
-  ImageUriParam:
+  ProjectName:
     Type: String
-    Description: URI of the Docker image to use for the Lambda function.
+    Default: handson-research-archives
+
+Globals:
+  Function:
+    Timeout: 120  # CrewAI処理に十分な時間を確保（APIGWの29秒制限とは別）
+    MemorySize: 512
+
+
+    Environment:
+      Variables:
+        CHROMA_DB_PATH: /tmp/chroma_db
+        CREWAI_STORAGE_DIR: /tmp/crewai_storage
+        HF_HOME: /tmp/huggingface
+        SENTENCE_TRANSFORMERS_HOME: /tmp/sentence_transformers
+        HOME: /tmp
+        SSM_PARAM_PREFIX: /handson/langfuse
+        PYTHONUTF8: "1"
+        CREWAI_LLM_MODEL: "bedrock/apac.amazon.nova-micro-v1:0"
 
 Resources:
-  # --- コスト爆発防止用のライフサイクル設定付 ECR リポジトリ ---
-  MyRepository:
-    Type: AWS::ECR::Repository
+  # 1. Lambda 関数の定義
+  LangGraphAgentFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      RepositoryName: !Sub "${AWS::StackName}-repo"
-      LifecyclePolicy:
-        LifecyclePolicyText: |
-          {
-            "rules": [
-              {
-                "rulePriority": 1,
-                "description": "Keep only the 3 most recent images",
-                "selection": {
-                  "tagStatus": "any",
-                  "countType": "imageCountMoreThan",
-                  "countNumber": 3
-                },
-                "action": {
-                  "type": "expire"
-                }
-              }
-            ]
-          }
+      LogGroupName: !Sub "/aws/lambda/handson-llmops-${AWS::StackName}-CrewFunction"
+      RetentionInDays: 3
 
-  CheckpointsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub "${AWS::StackName}-checkpoints"
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: thread_id
-          AttributeType: S
-        - AttributeName: checkpoint_id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: thread_id
-          KeyType: HASH
-        - AttributeName: checkpoint_id
-          KeyType: RANGE
-
-  ChatFunction:
+  CrewFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub "${AWS::StackName}-chat"
-      PackageType: Image
-      ImageUri: !Ref ImageUriParam
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.12
+      Architectures:
+        - x86_64
+      Timeout: 120
+      MemorySize: 512
+      LoggingConfig:
+        LogFormat: JSON
+        ApplicationLogLevel: INFO
+        SystemLogLevel: INFO
+        LogGroup: !Ref LangGraphAgentFunctionLogGroup
       Environment:
         Variables:
-          CHECKPOINT_TABLE: !Ref CheckpointsTable
-          BEDROCK_MODEL_ID: apac.amazon.nova-micro-v1:0
-          AWS_REGION_NAME: !Ref AWS::Region
+          BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
+          WRITES_TABLE: !Ref ResearchArchivesTable
+          LANGFUSE_HOST: "https://us.cloud.langfuse.com"
+          LANGFUSE_OTEL_HOST: "https://us.cloud.langfuse.com"
+          OTEL_EXPORTER_OTLP_ENDPOINT: "https://us.cloud.langfuse.com/api/public/otel"
+          LITELLM_LOG: "DEBUG"
+          PYTHONUTF8: "1"
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref CheckpointsTable
+        # ★ 修正: AWSLambdaBasicExecutionRole (CloudWatch Logs 出力権限)
+        - AWSLambdaBasicExecutionRole
+        # ── Bedrock 推論権限 ──
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
-                - bedrock:Converse*
+                - bedrock:InvokeModelWithResponseStream
+              Resource:
+                - "*"
+        # ── DynamoDB 操作権限（最小権限）──
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
                 - dynamodb:DescribeTable
+              Resource:
+                - !GetAtt ResearchArchivesTable.Arn
+                - !Sub "${ResearchArchivesTable.Arn}/index/*"
+        # ── SSM パラメータ読み取り権限 ──
+        - Statement:
+            - Effect: Allow
+              Action:
                 - ssm:GetParameter
-                - ssm:GetParameters
-              Resource: "*"
+                - ssm:GetParametersByPath
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/handson/langfuse*"
       Events:
-        ChatEvent:
+        ChatApi:
           Type: Api
           Properties:
             Path: /chat
             Method: post
-    Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: ./src
-      DockerTag: latest
+            RestApiId: !Ref LangGraphApi
+        ResearchApi:
+          Type: Api
+          Properties:
+            Path: /research
+            Method: post
+            RestApiId: !Ref LangGraphApi
 
+  # -------------------------------------------------------
+  # 2. API Gateway の定義 (SAM 管理 - AWS::Serverless::Api)
+  # ★ Fix: AWS::ApiGateway::RestApi から変更。SAM にメソッド/Deployment/Stage の
+  #   管理を委ねることで「no methods」エラーを解消。
+  # -------------------------------------------------------
+  LangGraphApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          UsagePlanName: LangGraphUsagePlanV10
+
+  # -----------------------------------------------------------
+  # 4. DynamoDB テーブル（Phase 9-2）
+  # -----------------------------------------------------------
+  ResearchArchivesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Delete
+    Properties:
+      # ★ Fix: 固定名から動的命名に変更し ResourceExistenceCheck を回避
+      #    例: handson-research-archives-handson-llmops-vfinal
+      TableName: !Sub "handson-research-archives-${AWS::StackName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: content_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: content_id
+          KeyType: HASH
+
+# ============================================================
+# Outputs
+# ============================================================
 Outputs:
   ApiEndpoint:
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
-  TableName:
-    Value: !Ref CheckpointsTable
+    Description: "API Root Endpoint (SAM Managed)"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
+  ChatApiEndpoint:
+    Description: "Chat API Endpoint"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
+  ResearchApiEndpoint:
+    Description: "Research API Endpoint"
+    Value: !Sub "https://${LangGraphApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/research"
+  ResearchArchivesTableName:
+    Description: DynamoDB table for research archives
+    Value: !Ref ResearchArchivesTable
+  ResearchArchivesTableArn:
+    Description: DynamoDB table ARN
+    Value: !GetAtt ResearchArchivesTable.Arn
