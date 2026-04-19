@@ -1,25 +1,36 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: langgraph-chat-v3 (REST API + DynamoDB checkpoints, no PITR)
+Description: langgraph-chat-v58 (LangGraph 1.x + ECR Lifecycle + DynamoDB persistence)
 
 Parameters:
-  StageName:
+  ImageUriParam:
     Type: String
-    Default: v1
-
-Globals:
-  Function:
-    Runtime: python3.12
-    Timeout: 30
-    MemorySize: 1024
-    Architectures: [x86_64]
+    Description: URI of the Docker image to use for the Lambda function.
 
 Resources:
-  # --- REST API (to avoid apigateway:TagResource issues) ---
-  ChatApi:
-     Type: AWS::Serverless::Api
-     Properties:
-       StageName: !Ref StageName
+  # --- コスト爆発防止用のライフサイクル設定付 ECR リポジトリ ---
+  MyRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub "${AWS::StackName}-repo"
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only the 3 most recent images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 3
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
 
   CheckpointsTable:
     Type: AWS::DynamoDB::Table
@@ -42,6 +53,7 @@ Resources:
     Properties:
       FunctionName: !Sub "${AWS::StackName}-chat"
       PackageType: Image
+      ImageUri: !Ref ImageUriParam
       Environment:
         Variables:
           CHECKPOINT_TABLE: !Ref CheckpointsTable
@@ -54,30 +66,24 @@ Resources:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
-                - bedrock:InvokeModelWithResponseStream
-                - bedrock:Converse
-                - bedrock:ConverseStream
+                - bedrock:Converse*
                 - dynamodb:DescribeTable
-              Resource:
-                - "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"
-                - "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0"
-                - "arn:aws:bedrock:ap-northeast-1:*:inference-profile/apac.amazon.nova-micro-v1:0"
-                - "arn:aws:bedrock:ap-northeast-1:*:application-inference-profile/*"
-    Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: ./src
-      DockerTag: v1
+                - ssm:GetParameter
+                - ssm:GetParameters
+              Resource: "*"
       Events:
         ChatEvent:
           Type: Api
           Properties:
-            RestApiId: !Ref ChatApi
             Path: /chat
             Method: post
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./src
+      DockerTag: latest
 
 Outputs:
   ApiEndpoint:
-    Description: Invoke URL
-    Value: !Sub "https://${ChatApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/chat"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
   TableName:
     Value: !Ref CheckpointsTable

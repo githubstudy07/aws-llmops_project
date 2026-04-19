@@ -8,6 +8,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_aws import ChatBedrockConverse
 from langgraph.checkpoint.aws import DynamoDBSaver
+from langfuse.callback import CallbackHandler
 
 # --- Logging Setup ---
 logger = logging.getLogger()
@@ -15,8 +16,36 @@ logger.setLevel(logging.INFO)
 
 # --- Configuration ---
 DDB_TABLE_NAME = os.environ.get("CHECKPOINT_TABLE")
-MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "amazon.nova-micro-v1:0")
-REGION = os.environ.get("BEDROCK_REGION", "ap-northeast-1")
+MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "apac.amazon.nova-micro-v1:0")
+REGION = os.environ.get("AWS_REGION_NAME", "ap-northeast-1")
+
+_langfuse_host = None
+_langfuse_public_key = None
+_langfuse_secret_key = None
+
+def get_langfuse_config():
+    global _langfuse_host, _langfuse_public_key, _langfuse_secret_key
+    if _langfuse_public_key and _langfuse_secret_key:
+        return _langfuse_host, _langfuse_public_key, _langfuse_secret_key
+        
+    ssm = boto3.client('ssm', region_name=REGION)
+    try:
+        response = ssm.get_parameters(
+            Names=[
+                "/handson/langfuse/host",
+                "/handson/langfuse/public_key",
+                "/handson/langfuse/secret_key"
+            ],
+            WithDecryption=True
+        )
+        params = {p['Name']: p['Value'] for p in response['Parameters']}
+        _langfuse_host = params.get("/handson/langfuse/host", "https://us.cloud.langfuse.com")
+        _langfuse_public_key = params.get("/handson/langfuse/public_key")
+        _langfuse_secret_key = params.get("/handson/langfuse/secret_key")
+        return _langfuse_host, _langfuse_public_key, _langfuse_secret_key
+    except Exception as e:
+        logger.error(f"Failed to fetch Langfuse configs from SSM: {e}")
+        raise
 
 # --- State Definition ---
 class State(TypedDict):
@@ -60,7 +89,7 @@ def lambda_handler(event, context):
         # 1. リクエスト解析
         body = json.loads(event.get("body", "{}"))
         user_message = body.get("message")
-        thread_id = body.get("thread_id", "default-thread")
+        thread_id = body.get("thread_id", "session-default")
         
         if not user_message:
             return {
@@ -69,19 +98,34 @@ def lambda_handler(event, context):
             }
 
         # 2. 永続化層 (DynamoDB) の準備
-        # AWS Lambda 実行環境の認証情報をそのまま使用
         ddb_client = boto3.client("dynamodb", region_name=REGION)
         saver = DynamoDBSaver(table_name=DDB_TABLE_NAME, client=ddb_client)
         
         # 3. グラフの構築と実行
         graph = create_graph(saver)
         
-        # コンテキスト（thread_id）の設定
-        config = {"configurable": {"thread_id": thread_id}}
+        # Langfuse ハンドラーの初期化
+        lf_host, lf_pk, lf_sk = get_langfuse_config()
+        
+        langfuse_handler = CallbackHandler(
+            public_key=lf_pk,
+            secret_key=lf_sk,
+            host=lf_host,
+            session_id=thread_id
+        )
+        
+        # コンテキスト（thread_id）とコールバックの設定
+        config = {
+            "configurable": {"thread_id": thread_id},
+            "callbacks": [langfuse_handler]
+        }
         
         # 実行 (過去の履歴は graph が DynamoDB から自動的にロードする)
         input_data = {"messages": [{"role": "user", "content": user_message}]}
         result = graph.invoke(input_data, config=config)
+        
+        # トレースを確実に送信
+        langfuse_handler.flush()
         
         # 最新の回答を抽出 (最後のメッセージ)
         final_answer = result["messages"][-1].content
