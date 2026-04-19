@@ -39,7 +39,7 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: app.lambda_handler
-      Runtime: python3.12
+      Runtime: python3.11
       Architectures:
         - x86_64
       Timeout: 120
