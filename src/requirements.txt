@@ -1,6 +1,4 @@
-langchain>=0.3.0
-langchain-community>=0.3.0
-langchain-aws>=0.2.0
-langgraph>=0.2.0
-duckduckgo-search>=6.3.0,<7.0.0
-boto3
+duckduckgo-search
+langchain-aws
+langgraph
+langgraph-checkpoint-aws

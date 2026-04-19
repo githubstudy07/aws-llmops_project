@@ -1,54 +1,83 @@
-AWSTemplateFormatVersion: '2010-09-09'
+AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
-Description: >
-  LangGraph Restart - Minimal Agent Setup
+Description: langgraph-chat-v3 (REST API + DynamoDB checkpoints, no PITR)
+
+Parameters:
+  StageName:
+    Type: String
+    Default: v1
 
 Globals:
   Function:
-    Timeout: 120
-    MemorySize: 512
+    Runtime: python3.12
+    Timeout: 30
+    MemorySize: 1024
+    Architectures: [x86_64]
 
 Resources:
-  # Lambda Function
-  AgentFunction:
+  # --- REST API (to avoid apigateway:TagResource issues) ---
+  ChatApi:
+     Type: AWS::Serverless::Api
+     Properties:
+       StageName: !Ref StageName
+
+  CheckpointsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-checkpoints"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: thread_id
+          AttributeType: S
+        - AttributeName: checkpoint_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: thread_id
+          KeyType: HASH
+        - AttributeName: checkpoint_id
+          KeyType: RANGE
+
+  ChatFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: src/
-      Handler: app.lambda_handler
-      Runtime: python3.12
-      Architectures:
-        - x86_64
+      FunctionName: !Sub "${AWS::StackName}-chat"
+      PackageType: Image
       Environment:
         Variables:
-          BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
-          PYTHONUTF8: "1"
+          CHECKPOINT_TABLE: !Ref CheckpointsTable
+          BEDROCK_MODEL_ID: apac.amazon.nova-micro-v1:0
+          AWS_REGION_NAME: !Ref AWS::Region
       Policies:
-        - AWSLambdaBasicExecutionRole
+        - DynamoDBCrudPolicy:
+            TableName: !Ref CheckpointsTable
         - Statement:
             - Effect: Allow
               Action:
                 - bedrock:InvokeModel
-              Resource: "*"
+                - bedrock:InvokeModelWithResponseStream
+                - bedrock:Converse
+                - bedrock:ConverseStream
+                - dynamodb:DescribeTable
+              Resource:
+                - "arn:aws:bedrock:*::foundation-model/amazon.nova-micro-v1:0"
+                - "arn:aws:bedrock:ap-northeast-1::foundation-model/amazon.nova-micro-v1:0"
+                - "arn:aws:bedrock:ap-northeast-1:*:inference-profile/apac.amazon.nova-micro-v1:0"
+                - "arn:aws:bedrock:ap-northeast-1:*:application-inference-profile/*"
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: ./src
+      DockerTag: v1
       Events:
-        ChatApi:
+        ChatEvent:
           Type: Api
           Properties:
+            RestApiId: !Ref ChatApi
             Path: /chat
             Method: post
-            RestApiId: !Ref RestartApi
-
-  # API Gateway
-  RestartApi:
-    Type: AWS::Serverless::Api
-    Properties:
-      StageName: Prod
-      Auth:
-        ApiKeyRequired: true
-        UsagePlan:
-          CreateUsagePlan: PER_API
-          UsagePlanName: LangGraphRestartPlan
 
 Outputs:
-  ChatApiEndpoint:
-    Description: "Chat API Endpoint"
-    Value: !Sub "https://${RestartApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/chat"
+  ApiEndpoint:
+    Description: Invoke URL
+    Value: !Sub "https://${ChatApi}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/chat"
+  TableName:
+    Value: !Ref CheckpointsTable
