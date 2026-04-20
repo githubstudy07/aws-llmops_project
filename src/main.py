@@ -8,7 +8,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_aws import ChatBedrockConverse
 from langgraph_checkpoint_aws import DynamoDBSaver
-from langfuse.callback import CallbackHandler
+from langfuse.langchain import CallbackHandler
 
 # --- Logging Setup ---
 logger = logging.getLogger()
