@@ -134,8 +134,8 @@ jobs:
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
             --parameter-overrides \
               Environment=production \
-              LangfusePublicKey=${{ secrets.LANGFUSE_PUBLIC_KEY }} \
-              LangfuseSecretKey=${{ secrets.LANGFUSE_SECRET_KEY }} \
+              LangfusePublicKey="${LANGFUSE_PUBLIC_KEY}" \
+              LangfuseSecretKey="${LANGFUSE_SECRET_KEY}" \
             --debug 2>&1 | tee sam_deploy.log
         continue-on-error: true
 
