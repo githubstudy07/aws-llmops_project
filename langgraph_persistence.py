@@ -1,25 +1,25 @@
 import json
 import boto3
+import logging
 from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
-from langgraph_checkpoint_dynamodb.saver import DynamoDBSaver
+from langgraph_checkpoint_aws import DynamoDBSaver
+from langchain_aws import ChatBedrockConverse
 from botocore.config import Config
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 """
-Phase 3-3: LangGraph 永続化 - DynamoDB チェックポインター
+Phase 3-3: LangGraph 永続化 - DynamoDB チェックポインター (セッション 59 仕様)
 DynamoDB を使用して、会話の「状態 (State)」を永続的に記録します。
 """
 
 # 設定
 REGION = "ap-northeast-1"
 MODEL_ID = "apac.amazon.nova-micro-v1:0"
-CHECKPOINT_TABLE = "handson-langgraph-checkpoints"
-WRITES_TABLE = "handson-langgraph-writes"
-
-# Bedrock Runtime クライアント
-config = Config(read_timeout=300, retries={'max_attempts': 3})
-client = boto3.client("bedrock-runtime", region_name=REGION, config=config)
+CHECKPOINT_TABLE = "langgraph-chat-checkpoints-v2"  # スキーマ: PK (HASH), SK (RANGE) ✅ 検証済み
 
 # 1. State (状態) の定義
 class State(TypedDict):
@@ -27,25 +27,14 @@ class State(TypedDict):
 
 # 2. Node (ノード) の定義: AI を呼び出す関数
 def chatbot(state: State):
-    bedrock_messages = []
-    for msg in state["messages"]:
-        role = "user" if msg.type == "human" else "assistant"
-        bedrock_messages.append({
-            "role": role,
-            "content": [{"text": msg.content}]
-        })
-
-    try:
-        response = client.converse(
-            modelId=MODEL_ID,
-            messages=bedrock_messages,
-            system=[{"text": "あなたは簡潔に回答する、親切な AI アシスタントです。"}],
-            inferenceConfig={"maxTokens": 300, "temperature": 0.7}
-        )
-        output_text = response["output"]["message"]["content"][0]["text"]
-        return {"messages": [{"role": "assistant", "content": output_text}]}
-    except Exception as e:
-        return {"messages": [{"role": "assistant", "content": f"エラー: {str(e)}"}]}
+    llm = ChatBedrockConverse(
+        model_id=MODEL_ID,
+        region_name=REGION,
+        temperature=0.7,
+        max_tokens=300
+    )
+    response = llm.invoke(state["messages"])
+    return {"messages": [response]}
 
 # 3. グラフの構築
 workflow = StateGraph(State)
@@ -53,13 +42,9 @@ workflow.add_node("chatbot", chatbot)
 workflow.add_edge(START, "chatbot")
 workflow.add_edge("chatbot", END)
 
-# 4. DynamoDB チェックポインターの設定
-# DynamoDBSaver は 2 つのテーブル名を必要とします
-checkpointer = DynamoDBSaver(
-    checkpoints_table_name=CHECKPOINT_TABLE,
-    writes_table_name=WRITES_TABLE,
-    client_config={"region_name": REGION}
-)
+# 4. DynamoDB チェックポインターの設定 (セッション 59 仕様)
+# 最新版: table_name と region_name パラメータ、PK/SK スキーマ対応
+checkpointer = DynamoDBSaver(table_name=CHECKPOINT_TABLE, region_name=REGION)
 
 # コンパイル時に checkpointer を指定
 app = workflow.compile(checkpointer=checkpointer)
@@ -79,12 +64,16 @@ def run_interaction(thread_id, user_input):
     print(f"[ai]: {last_msg.content}")
 
 if __name__ == "__main__":
-    # 5. テスト実行
-    # NOTE: 実行前に AWS コンソールまたは CLI で 'langgraph-checkpoints' テーブルを作成しておく必要があります。
-    # (DynamoDBSaver は自動作成機能を持たないため、事前に手動作成が必要です)
-    
+    # 5. テスト実行 (セッション 59 版)
+    # NOTE: テーブル 'langgraph-chat-checkpoints-v2' は既に存在し、52 個のチェックポイントが記録済みです。
+    # (PK/SK スキーマで既に DynamoDB に作成済み - セッション 58 で検証済み)
+
     session_id = "user-story-abc"
-    
-    print("--- 記憶のテスト ---")
-    run_interaction(session_id, "私の名前はナオジです。覚えておいてください。")
-    run_interaction(session_id, "私の名前は何ですか？")
+
+    logger.info("--- 記憶のテスト開始 ---")
+    try:
+        run_interaction(session_id, "私の名前はナオジです。覚えておいてください。")
+        run_interaction(session_id, "私の名前は何ですか？")
+        logger.info("✅ テスト完了: 記憶保持が成功しました。")
+    except Exception as e:
+        logger.error(f"❌ テスト失敗: {str(e)}", exc_info=True)
