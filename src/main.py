@@ -91,26 +91,29 @@ def lambda_handler(event, context):
         
         # Langfuse ハンドラーの初期化
         lf_host, lf_pk, lf_sk = get_langfuse_config()
-        
-        langfuse_handler = CallbackHandler(
-            public_key=lf_pk,
-            secret_key=lf_sk,
-            host=lf_host,
-            session_id=thread_id
-        )
+
+        langfuse_handler = None
+        if lf_pk and lf_sk:
+            # Set environment variables for Langfuse client initialization
+            os.environ["LANGFUSE_PUBLIC_KEY"] = lf_pk
+            os.environ["LANGFUSE_SECRET_KEY"] = lf_sk
+            os.environ["LANGFUSE_BASE_URL"] = lf_host
+            langfuse_handler = CallbackHandler(session_id=thread_id)
         
         # コンテキスト（thread_id）とコールバックの設定
         config = {
-            "configurable": {"thread_id": thread_id},
-            "callbacks": [langfuse_handler]
+            "configurable": {"thread_id": thread_id}
         }
-        
+        if langfuse_handler:
+            config["callbacks"] = [langfuse_handler]
+
         # 実行 (過去の履歴は graph が DynamoDB から自動的にロードする)
         input_data = {"messages": [{"role": "user", "content": user_message}]}
         result = graph.invoke(input_data, config=config)
-        
+
         # トレースを確実に送信
-        langfuse_handler.flush()
+        if langfuse_handler:
+            langfuse_handler.flush()
         
         # 最新の回答を抽出 (最後のメッセージ)
         final_answer = result["messages"][-1].content
