@@ -41,21 +41,7 @@ class State(TypedDict):
 
 # --- Node Implementation ---
 def chatbot(state: State):
-    """Bedrock Nova Micro を呼び出すノード - Langfuse スパン計装版（context manager）"""
-    try:
-        client = get_client()
-    except Exception:
-        client = None
-
-    # Span 1: Message Preparation
-    if client:
-        with client.span(
-            name="message_preparation",
-            input={"message_count": len(state["messages"])}
-        ):
-            pass
-
-    # Span 2: LLM Initialization and Invocation
+    """Bedrock Nova Micro を呼び出すノード"""
     llm = ChatBedrockConverse(
         model_id=MODEL_ID,
         region_name=REGION,
@@ -63,35 +49,7 @@ def chatbot(state: State):
         max_tokens=2048
     )
 
-    if client:
-        with client.span(
-            name="bedrock_invoke",
-            input={"message_count": len(state["messages"]), "model": MODEL_ID}
-        ) as span_invoke:
-            response = llm.invoke(state["messages"])
-            span_invoke.end(output={"response_length": len(response.content)})
-    else:
-        response = llm.invoke(state["messages"])
-
-    # Span 3: Token Counting (approximate)
-    if client:
-        token_estimate = len(response.content) // 4
-        with client.span(
-            name="token_counting",
-            input={"content_length": len(response.content)},
-            output={"token_estimate": token_estimate}
-        ):
-            pass
-
-    # Span 4: Response Formatting
-    if client:
-        with client.span(
-            name="response_formatting",
-            input={"response_type": type(response).__name__},
-            output={"success": True}
-        ):
-            pass
-
+    response = llm.invoke(state["messages"])
     return {"messages": [response]}
 
 # --- Graph Construction ---
