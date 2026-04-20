@@ -125,11 +125,6 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
-      Auth:
-        ApiKeyRequired: true
-        UsagePlan:
-          CreateUsagePlan: PER_API
-          UsagePlanName: LangGraphUsagePlanV10
 
   # -----------------------------------------------------------
   # 4. DynamoDB テーブル（Phase 9-2）
