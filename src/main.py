@@ -41,16 +41,52 @@ class State(TypedDict):
 
 # --- Node Implementation ---
 def chatbot(state: State):
-    """Bedrock Nova Micro を呼び出すノード"""
-    llm = ChatBedrockConverse(
-        model_id=MODEL_ID,
-        region_name=REGION,
-        temperature=0,
-        max_tokens=2048
-    )
+    """Bedrock Nova Micro を呼び出すノード（Langfuse v4 span 実装）"""
+    client = get_client()
 
-    response = llm.invoke(state["messages"])
-    return {"messages": [response]}
+    # SPAN 1: message_preparation - メッセージの準備
+    with client.start_as_current_observation(
+        as_type="span",
+        name="message_preparation",
+        input={"message_count": len(state["messages"])}
+    ) as span:
+        messages = state["messages"]
+        span.update(output={"status": "prepared", "message_count": len(messages)})
+
+    # SPAN 2: bedrock_invoke - LLM 呼び出し
+    with client.start_as_current_observation(
+        as_type="span",
+        name="bedrock_invoke",
+        input={"model": MODEL_ID, "message_count": len(messages)}
+    ) as span:
+        llm = ChatBedrockConverse(
+            model_id=MODEL_ID,
+            region_name=REGION,
+            temperature=0,
+            max_tokens=2048
+        )
+        response = llm.invoke(messages)
+        span.update(output={"response_length": len(response.content), "model": MODEL_ID})
+
+    # SPAN 3: token_counting - トークン数推定
+    with client.start_as_current_observation(
+        as_type="span",
+        name="token_counting",
+        input={"response_length": len(response.content)}
+    ) as span:
+        estimated_tokens = len(response.content) // 4
+        span.update(output={"estimated_tokens": estimated_tokens})
+
+    # SPAN 4: response_formatting - レスポンス整形
+    with client.start_as_current_observation(
+        as_type="span",
+        name="response_formatting",
+        input={"response_type": type(response).__name__}
+    ) as span:
+        result = {"messages": [response]}
+        span.update(output={"formatted": True, "message_count": 1})
+
+    return result
 
 # --- Graph Construction ---
 def create_graph(checkpointer):
