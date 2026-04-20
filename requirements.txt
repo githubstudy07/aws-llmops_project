@@ -8,4 +8,4 @@ langfuse>=4.3.1
 langgraph-checkpoint-aws>=0.1.0
 requests
 numpy==1.26.4
-pandas==2.1.4
+pandas==3.0.2
