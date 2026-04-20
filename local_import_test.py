@@ -13,11 +13,16 @@ sys.modules['langgraph'] = MagicMock()
 sys.modules['langgraph.prebuilt'] = MagicMock()
 
 try:
-    print("Testing imports in src/app.py...")
+    print("Testing imports in src/main.py...")
     # Add src to path
-    sys.path.append(os.path.join(os.getcwd(), 'src'))
-    import app
-    print("SUCCESS: src/app.py imported successfully (with mocks).")
+    sys.path.insert(0, os.path.join(os.getcwd(), 'src'))
+    import main
+    print("SUCCESS: src/main.py imported successfully (with mocks).")
+    print(f"  - chatbot function exists: {hasattr(main, 'chatbot')}")
+    print(f"  - lambda_handler function exists: {hasattr(main, 'lambda_handler')}")
+    print(f"  - get_client import exists: {hasattr(main, 'get_client')}")
 except Exception as e:
-    print(f"FAILURE: src/app.py import failed: {e}")
+    print(f"FAILURE: src/main.py import failed: {e}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)

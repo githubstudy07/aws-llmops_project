@@ -41,15 +41,58 @@ class State(TypedDict):
 
 # --- Node Implementation ---
 def chatbot(state: State):
-    """Bedrock Nova Micro を呼び出すノード"""
+    """Bedrock Nova Micro を呼び出すノード - Langfuse スパン計装版"""
+    try:
+        client = get_client()
+    except Exception:
+        client = None
+
+    # Span 1: Message Preparation
+    if client:
+        span_prep = client.span(
+            name="message_preparation",
+            input={"message_count": len(state["messages"])}
+        )
+        span_prep.end()
+
+    # Span 2: LLM Initialization and Invocation
     llm = ChatBedrockConverse(
         model_id=MODEL_ID,
         region_name=REGION,
         temperature=0,
         max_tokens=2048
     )
-    # LangChain の invoke を使用
+
+    if client:
+        span_invoke = client.span(
+            name="bedrock_invoke",
+            input={"message_count": len(state["messages"]), "model": MODEL_ID}
+        )
+
     response = llm.invoke(state["messages"])
+
+    if client:
+        span_invoke.end(output={"response_length": len(response.content)})
+
+    # Span 3: Token Counting (approximate)
+    if client:
+        token_estimate = len(response.content) // 4
+        span_tokens = client.span(
+            name="token_counting",
+            input={"content_length": len(response.content)},
+            output={"token_estimate": token_estimate}
+        )
+        span_tokens.end()
+
+    # Span 4: Response Formatting
+    if client:
+        span_format = client.span(
+            name="response_formatting",
+            input={"response_type": type(response).__name__},
+            output={"success": True}
+        )
+        span_format.end()
+
     return {"messages": [response]}
 
 # --- Graph Construction ---
