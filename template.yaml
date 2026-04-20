@@ -125,6 +125,9 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
+      Auth:
+        DefaultAuthorizer: NONE
+        AddDefaultAuthorizerToCorsPreflight: false
 
   # -----------------------------------------------------------
   # 4. DynamoDB テーブル（Phase 9-2）
