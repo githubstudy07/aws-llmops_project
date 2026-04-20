@@ -25,6 +25,8 @@ def get_langfuse_config():
     lf_pk = os.environ.get("LANGFUSE_PUBLIC_KEY")
     lf_sk = os.environ.get("LANGFUSE_SECRET_KEY")
 
+    logger.info(f"Langfuse Config: host={lf_host}, pk_exists={bool(lf_pk)}, sk_exists={bool(lf_sk)}")
+
     if not lf_pk or not lf_sk:
         logger.warning("Langfuse API keys not configured via environment variables. Tracing may be disabled.")
         return lf_host, None, None
