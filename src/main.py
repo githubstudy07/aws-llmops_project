@@ -98,7 +98,7 @@ def lambda_handler(event, context):
             os.environ["LANGFUSE_PUBLIC_KEY"] = lf_pk
             os.environ["LANGFUSE_SECRET_KEY"] = lf_sk
             os.environ["LANGFUSE_BASE_URL"] = lf_host
-            langfuse_handler = CallbackHandler(session_id=thread_id)
+            langfuse_handler = CallbackHandler()
         
         # コンテキスト（thread_id）とコールバックの設定
         config = {
