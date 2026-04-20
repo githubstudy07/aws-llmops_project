@@ -79,10 +79,10 @@ jobs:
       # ----------------------------------------------------------------
       # SAM セットアップ
       # ----------------------------------------------------------------
-      - name: Set up Python 3.12 (SAM CLI 用)
+      - name: Set up Python 3.11 (SAM CLI 用)
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
       - name: Install SAM CLI
         uses: aws-actions/setup-sam@v2
