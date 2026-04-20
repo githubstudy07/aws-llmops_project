@@ -128,7 +128,7 @@ Resources:
     Properties:
       StageName: Prod
       Auth:
-        ApiKeyRequired: true
+        ApiKeyRequired: false
         DefaultAuthorizer: NONE
         AddDefaultAuthorizerToCorsPreflight: false
 
