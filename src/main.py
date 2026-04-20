@@ -9,6 +9,7 @@ from langgraph.graph.message import add_messages
 from langchain_aws import ChatBedrockConverse
 from langgraph_checkpoint_aws import DynamoDBSaver
 from langfuse.langchain import CallbackHandler
+from langfuse import get_client
 
 # --- Logging Setup ---
 logger = logging.getLogger()
@@ -111,9 +112,9 @@ def lambda_handler(event, context):
         input_data = {"messages": [{"role": "user", "content": user_message}]}
         result = graph.invoke(input_data, config=config)
 
-        # トレースを確実に送信
+        # トレースを確実に送信（Langfuse クライアントから flush）
         if langfuse_handler:
-            langfuse_handler.flush()
+            get_client().flush()
         
         # 最新の回答を抽出 (最後のメッセージ)
         final_answer = result["messages"][-1].content

@@ -67,6 +67,7 @@ Resources:
           LANGFUSE_BASE_URL: "https://us.cloud.langfuse.com"
           LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
           LANGFUSE_SECRET_KEY: !Ref LangfuseSecretKey
+          LANGCHAIN_CALLBACKS_BACKGROUND: "false"
           LITELLM_LOG: "DEBUG"
           PYTHONUTF8: "1"
       Policies:
