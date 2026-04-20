@@ -41,7 +41,7 @@ class State(TypedDict):
 
 # --- Node Implementation ---
 def chatbot(state: State):
-    """Bedrock Nova Micro を呼び出すノード - Langfuse スパン計装版"""
+    """Bedrock Nova Micro を呼び出すノード - Langfuse スパン計装版（context manager）"""
     try:
         client = get_client()
     except Exception:
@@ -49,11 +49,11 @@ def chatbot(state: State):
 
     # Span 1: Message Preparation
     if client:
-        span_prep = client.span(
+        with client.span(
             name="message_preparation",
             input={"message_count": len(state["messages"])}
-        )
-        span_prep.end()
+        ):
+            pass
 
     # Span 2: LLM Initialization and Invocation
     llm = ChatBedrockConverse(
@@ -64,34 +64,33 @@ def chatbot(state: State):
     )
 
     if client:
-        span_invoke = client.span(
+        with client.span(
             name="bedrock_invoke",
             input={"message_count": len(state["messages"]), "model": MODEL_ID}
-        )
-
-    response = llm.invoke(state["messages"])
-
-    if client:
-        span_invoke.end(output={"response_length": len(response.content)})
+        ) as span_invoke:
+            response = llm.invoke(state["messages"])
+            span_invoke.end(output={"response_length": len(response.content)})
+    else:
+        response = llm.invoke(state["messages"])
 
     # Span 3: Token Counting (approximate)
     if client:
         token_estimate = len(response.content) // 4
-        span_tokens = client.span(
+        with client.span(
             name="token_counting",
             input={"content_length": len(response.content)},
             output={"token_estimate": token_estimate}
-        )
-        span_tokens.end()
+        ):
+            pass
 
     # Span 4: Response Formatting
     if client:
-        span_format = client.span(
+        with client.span(
             name="response_formatting",
             input={"response_type": type(response).__name__},
             output={"success": True}
-        )
-        span_format.end()
+        ):
+            pass
 
     return {"messages": [response]}
 
