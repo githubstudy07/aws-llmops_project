@@ -1,6 +1,7 @@
 langchain>=0.2.0
 langchain-aws
 langgraph
+langgraph-checkpoint-aws
 langfuse>=4.0.0
 duckduckgo-search
 boto3
