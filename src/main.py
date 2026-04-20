@@ -7,7 +7,7 @@ from typing import Annotated, TypedDict
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain_aws import ChatBedrockConverse
-from langgraph.checkpoint.aws import DynamoDBSaver
+from langgraph_checkpoint_aws import DynamoDBSaver
 from langfuse.callback import CallbackHandler
 
 # --- Logging Setup ---
@@ -98,8 +98,7 @@ def lambda_handler(event, context):
             }
 
         # 2. 永続化層 (DynamoDB) の準備
-        ddb_client = boto3.client("dynamodb", region_name=REGION)
-        saver = DynamoDBSaver(table_name=DDB_TABLE_NAME, client=ddb_client)
+        saver = DynamoDBSaver(table_name=DDB_TABLE_NAME, region_name=REGION)
         
         # 3. グラフの構築と実行
         graph = create_graph(saver)
