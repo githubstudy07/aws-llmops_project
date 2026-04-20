@@ -9,7 +9,7 @@ from langgraph.graph.message import add_messages
 from langchain_aws import ChatBedrockConverse
 from langgraph_checkpoint_aws import DynamoDBSaver
 from langfuse.langchain import CallbackHandler
-from langfuse import get_client
+from langfuse import get_client, propagate_attributes
 
 # --- Logging Setup ---
 logger = logging.getLogger()
@@ -110,7 +110,10 @@ def lambda_handler(event, context):
 
         # 実行 (過去の履歴は graph が DynamoDB から自動的にロードする)
         input_data = {"messages": [{"role": "user", "content": user_message}]}
-        result = graph.invoke(input_data, config=config)
+
+        # Langfuse v4: session_id でトレースをグループ化
+        with propagate_attributes(session_id=thread_id):
+            result = graph.invoke(input_data, config=config)
 
         # トレースを確実に送信（Langfuse クライアントから flush）
         if langfuse_handler:
