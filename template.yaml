@@ -8,6 +8,16 @@ Parameters:
   ProjectName:
     Type: String
     Default: handson-research-archives
+  LangfusePublicKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Langfuse API Public Key (from GitHub Secrets)"
+  LangfuseSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Langfuse API Secret Key (from GitHub Secrets)"
 
 Globals:
   Function:
@@ -52,10 +62,11 @@ Resources:
       Environment:
         Variables:
           BEDROCK_MODEL_ID: "apac.amazon.nova-micro-v1:0"
+          CHECKPOINT_TABLE: !Sub "langgraph-chat-checkpoints-v2"
           WRITES_TABLE: !Ref ResearchArchivesTable
-          LANGFUSE_HOST: "https://us.cloud.langfuse.com"
-          LANGFUSE_OTEL_HOST: "https://us.cloud.langfuse.com"
-          OTEL_EXPORTER_OTLP_ENDPOINT: "https://us.cloud.langfuse.com/api/public/otel"
+          LANGFUSE_BASE_URL: "https://us.cloud.langfuse.com"
+          LANGFUSE_PUBLIC_KEY: !Ref LangfusePublicKey
+          LANGFUSE_SECRET_KEY: !Ref LangfuseSecretKey
           LITELLM_LOG: "DEBUG"
           PYTHONUTF8: "1"
       Policies:

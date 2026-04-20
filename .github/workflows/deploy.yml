@@ -121,6 +121,9 @@ jobs:
       # SAM Deploy
       # -------------------------------------------------------
       - name: SAM Deploy
+        env:
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
         run: |
           sam deploy \
             --no-confirm-changeset \
@@ -129,7 +132,10 @@ jobs:
             --region ${{ env.AWS_REGION }} \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
             --s3-bucket handson-llmops-sam-artifacts-naoji-891377371917 \
-            --parameter-overrides Environment=production \
+            --parameter-overrides \
+              Environment=production \
+              LangfusePublicKey=${{ secrets.LANGFUSE_PUBLIC_KEY }} \
+              LangfuseSecretKey=${{ secrets.LANGFUSE_SECRET_KEY }} \
             --debug 2>&1 | tee sam_deploy.log
         continue-on-error: true
 

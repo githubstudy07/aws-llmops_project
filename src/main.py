@@ -19,33 +19,17 @@ DDB_TABLE_NAME = os.environ.get("CHECKPOINT_TABLE")
 MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "apac.amazon.nova-micro-v1:0")
 REGION = os.environ.get("AWS_REGION_NAME", "ap-northeast-1")
 
-_langfuse_host = None
-_langfuse_public_key = None
-_langfuse_secret_key = None
-
 def get_langfuse_config():
-    global _langfuse_host, _langfuse_public_key, _langfuse_secret_key
-    if _langfuse_public_key and _langfuse_secret_key:
-        return _langfuse_host, _langfuse_public_key, _langfuse_secret_key
-        
-    ssm = boto3.client('ssm', region_name=REGION)
-    try:
-        response = ssm.get_parameters(
-            Names=[
-                "/handson/langfuse/host",
-                "/handson/langfuse/public_key",
-                "/handson/langfuse/secret_key"
-            ],
-            WithDecryption=True
-        )
-        params = {p['Name']: p['Value'] for p in response['Parameters']}
-        _langfuse_host = params.get("/handson/langfuse/host", "https://us.cloud.langfuse.com")
-        _langfuse_public_key = params.get("/handson/langfuse/public_key")
-        _langfuse_secret_key = params.get("/handson/langfuse/secret_key")
-        return _langfuse_host, _langfuse_public_key, _langfuse_secret_key
-    except Exception as e:
-        logger.error(f"Failed to fetch Langfuse configs from SSM: {e}")
-        raise
+    """環境変数から Langfuse 設定を取得"""
+    lf_host = os.environ.get("LANGFUSE_BASE_URL", "https://us.cloud.langfuse.com")
+    lf_pk = os.environ.get("LANGFUSE_PUBLIC_KEY")
+    lf_sk = os.environ.get("LANGFUSE_SECRET_KEY")
+
+    if not lf_pk or not lf_sk:
+        logger.warning("Langfuse API keys not configured via environment variables. Tracing may be disabled.")
+        return lf_host, None, None
+
+    return lf_host, lf_pk, lf_sk
 
 # --- State Definition ---
 class State(TypedDict):
