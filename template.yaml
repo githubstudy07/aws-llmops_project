@@ -94,6 +94,7 @@ Resources:
               Resource:
                 - !GetAtt ResearchArchivesTable.Arn
                 - !Sub "${ResearchArchivesTable.Arn}/index/*"
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/langgraph-chat-checkpoints-v2"
         # ── SSM パラメータ読み取り権限 ──
         - Statement:
             - Effect: Allow
