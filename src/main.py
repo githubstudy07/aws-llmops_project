@@ -238,8 +238,8 @@ def create_graph(checkpointer):
     workflow.add_edge("analysis", "report")
     workflow.add_edge("report", END)
 
-    # チェックポインター付きでコンパイル（recursion_limit で無限ループ防止）
-    return workflow.compile(checkpointer=checkpointer, recursion_limit=RECURSION_LIMIT)
+    # チェックポインター付きでコンパイル
+    return workflow.compile(checkpointer=checkpointer)
 
 # --- Lambda Handler ---
 def lambda_handler(event, context):
@@ -280,7 +280,8 @@ def lambda_handler(event, context):
 
         # コンテキスト（thread_id）とコールバックの設定
         config = {
-            "configurable": {"thread_id": thread_id}
+            "configurable": {"thread_id": thread_id},
+            "recursion_limit": RECURSION_LIMIT
         }
         if langfuse_handler:
             config["callbacks"] = [langfuse_handler]
