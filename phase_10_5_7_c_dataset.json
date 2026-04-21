@@ -1,4 +1,5 @@
 {
+  "domain_terms": ["アーキテクチャ", "API", "Lambda", "DynamoDB", "Langfuse", "LLM", "プロンプト", "GCP", "GA4", "Vertex AI", "Bedrock", "クラウド"],
   "dataset": [
     {
       "id": "q1",

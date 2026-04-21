@@ -3,6 +3,7 @@ import os
 import uuid
 import time
 import logging
+import re
 from datetime import datetime
 from typing import Dict, List, Tuple
 from langchain_aws import ChatBedrock
@@ -42,11 +43,11 @@ prompts = load_prompts("phase_10_5_7_c_prompts.json")
 SYSTEM_PROMPT_A = prompts['variant_a']['system_prompt']
 SYSTEM_PROMPT_B = prompts['variant_b']['system_prompt']
 
-def load_dataset(filepath: str) -> List[Dict]:
-    """Load test dataset from JSON file."""
+def load_dataset(filepath: str) -> Tuple[List[Dict], List[str]]:
+    """Load test dataset and domain terms from JSON file."""
     with open(filepath, 'r', encoding='utf-8') as f:
         data = json.load(f)
-    return data['dataset']
+    return data['dataset'], data.get('domain_terms', [])
 
 def check_example_presence(response: str) -> Dict:
     """
@@ -76,8 +77,30 @@ def check_example_presence(response: str) -> Dict:
         "example_pattern_count": count
     }
 
-def evaluate_response(response: str, expected_keywords: List[str]) -> Dict:
-    """Keyword match, length, and C-4 example presence evaluation."""
+def measure_structure(response: str) -> Dict:
+    """B-3: 段落数とリスト化度を計測"""
+    paragraphs = [p.strip() for p in response.split('\n\n') if p.strip()]
+    list_items = re.findall(r'^[\-\*・●▶︎\d+\.]', response, re.MULTILINE)
+    has_header = bool(re.search(r'^#{1,3}\s', response, re.MULTILINE))
+
+    return {
+        "paragraph_count": len(paragraphs),
+        "list_item_count": len(list_items),
+        "has_header": has_header,
+        "structure_score": min(10.0, len(paragraphs) * 2 + len(list_items) * 0.5)
+    }
+
+def measure_term_density(response: str, domain_terms: List[str]) -> Dict:
+    """D-1: 専門用語密度"""
+    words = response.split()
+    if not words:
+        return {"term_density": 0.0, "term_count": 0}
+    term_count = sum(1 for term in domain_terms if term.lower() in response.lower())
+    density = term_count / len(words)
+    return {"term_density": round(density, 4), "term_count": term_count}
+
+def evaluate_response(response: str, expected_keywords: List[str], domain_terms: List[str]) -> Dict:
+    """Keyword match, length, C-4 example presence, B-3 structure, and D-1 term density eval."""
     response_lower = response.lower()
     keyword_matches = sum(1 for kw in expected_keywords if kw.lower() in response_lower)
 
@@ -88,6 +111,12 @@ def evaluate_response(response: str, expected_keywords: List[str]) -> Dict:
 
     # C-4: 例示の有無
     example_result = check_example_presence(response)
+    
+    # B-3: 段落数・リスト化度
+    structure_result = measure_structure(response)
+    
+    # D-1: 専門用語密度
+    term_density_result = measure_term_density(response, domain_terms)
 
     return {
         "score": round(total_score, 2),
@@ -97,10 +126,18 @@ def evaluate_response(response: str, expected_keywords: List[str]) -> Dict:
         # C-4 追加フィールド
         "has_example": example_result["has_example"],
         "example_score": example_result["example_score"],
-        "example_patterns_found": example_result["example_patterns_found"]
+        "example_patterns_found": example_result["example_patterns_found"],
+        # B-3 追加フィールド
+        "paragraph_count": structure_result["paragraph_count"],
+        "list_item_count": structure_result["list_item_count"],
+        "has_header": structure_result["has_header"],
+        "structure_score": structure_result["structure_score"],
+        # D-1 追加フィールド
+        "term_count": term_density_result["term_count"],
+        "term_density": term_density_result["term_density"]
     }
 
-def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, session_id: str) -> List[Dict]:
+def run_experiment(dataset: List[Dict], domain_terms: List[str], system_prompt: str, variant_name: str, session_id: str) -> List[Dict]:
     """Run all questions with specified system prompt."""
     results = []
 
@@ -127,7 +164,7 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
             total_tokens  = input_tokens + output_tokens
 
             # Evaluate response
-            evaluation = evaluate_response(answer, expected_keywords)
+            evaluation = evaluate_response(answer, expected_keywords, domain_terms)
 
             # Record to Langfuse with trace
             trace_id = f"{session_id}-{variant_name}-{idx}"
@@ -184,6 +221,22 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
                 comment=f"has_example={evaluation['has_example']}, patterns={evaluation['example_patterns_found']}"
             )
 
+            # B-3: 構造スコアを記録
+            client.score(
+                trace_id=trace.id,
+                name="structure_score",
+                value=evaluation["structure_score"],
+                comment=f"paragraphs={evaluation['paragraph_count']}, list_items={evaluation['list_item_count']}, has_header={evaluation['has_header']}"
+            )
+
+            # D-1: 専門用語密度スコアを記録
+            client.score(
+                trace_id=trace.id,
+                name="term_density",
+                value=evaluation["term_density"],
+                comment=f"term_count={evaluation['term_count']} out of approx {len(answer.split())} words"
+            )
+
             result = {
                 "question_id": item['id'],
                 "question": question,
@@ -216,19 +269,19 @@ def run_ab_test():
     logger.info("=" * 60)
 
     # Load dataset
-    dataset = load_dataset("phase_10_5_7_c_dataset.json")
-    logger.info(f"Loaded {len(dataset)} questions")
+    dataset, domain_terms = load_dataset("phase_10_5_7_c_dataset.json")
+    logger.info(f"Loaded {len(dataset)} questions and {len(domain_terms)} domain terms")
 
     # Generate session ID
     session_id = f"phase-10-5-7-c-{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     # Run Variant A (Baseline)
     logger.info("\n--- Running Variant A (Baseline) ---")
-    results_a = run_experiment(dataset, SYSTEM_PROMPT_A, "Variant_A_Baseline", session_id)
+    results_a = run_experiment(dataset, domain_terms, SYSTEM_PROMPT_A, "Variant_A_Baseline", session_id)
 
     # Run Variant B (Improved)
     logger.info("\n--- Running Variant B (Improved) ---")
-    results_b = run_experiment(dataset, SYSTEM_PROMPT_B, "Variant_B_Improved", session_id)
+    results_b = run_experiment(dataset, domain_terms, SYSTEM_PROMPT_B, "Variant_B_Improved", session_id)
 
     # Calculate aggregate metrics
     scores_a = [r['evaluation']['score'] for r in results_a if 'evaluation' in r]
