@@ -1,6 +1,7 @@
 import json
 import os
 import uuid
+import time
 import logging
 from datetime import datetime
 from typing import Dict, List, Tuple
@@ -73,10 +74,22 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
         expected_keywords = item.get('expected_keywords', [])
 
         try:
+            # E-1: レイテンシー計測開始
+            invoke_start = time.time()
+
             # Invoke LLM
             messages = [HumanMessage(content=f"{system_prompt}\n\nQuestion: {question}")]
             response = llm.invoke(messages)
             answer = response.content
+
+            # E-1: レイテンシー計測終了
+            latency_sec = round(time.time() - invoke_start, 3)
+
+            # B-2: トークン数取得（langchain_aws の response_metadata から）
+            usage = response.response_metadata.get("usage", {})
+            input_tokens  = usage.get("inputTokens",  0)
+            output_tokens = usage.get("outputTokens", 0)
+            total_tokens  = input_tokens + output_tokens
 
             # Evaluate response
             evaluation = evaluate_response(answer, expected_keywords)
@@ -95,10 +108,16 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
                 name=f"question_{item['id']}",
                 input={"question": question, "system_prompt": system_prompt[:50] + "..."},
                 output={"answer": answer[:100] + "..." if len(answer) > 100 else answer},
-                metadata={"variant": variant_name}
+                metadata={
+                    "variant": variant_name,
+                    "latency_sec": latency_sec,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "total_tokens": total_tokens
+                }
             )
 
-            # Record evaluation score
+            # Record evaluation score (既存)
             client.score(
                 trace_id=trace.id,
                 name="response_quality",
@@ -106,15 +125,36 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
                 comment=f"Keyword matches: {evaluation['keyword_matches']}/{evaluation['expected_keywords_count']}, Response length: {evaluation['response_length']} chars"
             )
 
+            # E-1: レイテンシースコアを記録
+            client.score(
+                trace_id=trace.id,
+                name="latency_sec",
+                value=latency_sec,
+                comment=f"LLM invoke latency for {variant_name} Q{idx+1}"
+            )
+
+            # B-2: トークン数スコアを記録
+            client.score(
+                trace_id=trace.id,
+                name="total_tokens",
+                value=float(total_tokens),
+                comment=f"input={input_tokens}, output={output_tokens}"
+            )
+
             result = {
                 "question_id": item['id'],
                 "question": question,
                 "answer": answer,
                 "evaluation": evaluation,
-                "trace_id": trace_id
+                "trace_id": trace_id,
+                # 追加フィールド: 効率性メトリクス
+                "latency_sec": latency_sec,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens
             }
             results.append(result)
-            logger.info(f"[{variant_name}] Q{idx+1}: Score={evaluation['score']}")
+            logger.info(f"[{variant_name}] Q{idx+1}: Score={evaluation['score']} | Latency={latency_sec}s | Tokens={total_tokens}")
 
         except Exception as e:
             logger.error(f"Error processing question {item['id']}: {str(e)}")
