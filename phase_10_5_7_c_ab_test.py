@@ -48,8 +48,36 @@ def load_dataset(filepath: str) -> List[Dict]:
         data = json.load(f)
     return data['dataset']
 
+def check_example_presence(response: str) -> Dict:
+    """
+    C-4: 例示の有無
+    日本語・英語の例示表現パターンを検出し、0/7/10の3段階スコアとして返す。
+    """
+    example_patterns = [
+        "例えば", "たとえば", "具体的には", "例として", "例：", "例）",
+        "〜など", "などが挙げられ", "ケースとして",
+        "for example", "for instance", "e.g.", "such as", "like ",
+    ]
+    response_lower = response.lower()
+    found_patterns = [p for p in example_patterns if p.lower() in response_lower]
+    count = len(found_patterns)
+
+    if count == 0:
+        example_score = 0.0
+    elif count == 1:
+        example_score = 7.0
+    else:
+        example_score = 10.0
+
+    return {
+        "has_example": count > 0,
+        "example_score": example_score,
+        "example_patterns_found": found_patterns,
+        "example_pattern_count": count
+    }
+
 def evaluate_response(response: str, expected_keywords: List[str]) -> Dict:
-    """Simple evaluation: keyword match and length."""
+    """Keyword match, length, and C-4 example presence evaluation."""
     response_lower = response.lower()
     keyword_matches = sum(1 for kw in expected_keywords if kw.lower() in response_lower)
 
@@ -58,11 +86,18 @@ def evaluate_response(response: str, expected_keywords: List[str]) -> Dict:
     length_score = min(50, len(response) / 100)  # Normalized to 100 chars = 50 points
     total_score = keyword_score + length_score
 
+    # C-4: 例示の有無
+    example_result = check_example_presence(response)
+
     return {
         "score": round(total_score, 2),
         "keyword_matches": keyword_matches,
         "response_length": len(response),
-        "expected_keywords_count": len(expected_keywords)
+        "expected_keywords_count": len(expected_keywords),
+        # C-4 追加フィールド
+        "has_example": example_result["has_example"],
+        "example_score": example_result["example_score"],
+        "example_patterns_found": example_result["example_patterns_found"]
     }
 
 def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, session_id: str) -> List[Dict]:
@@ -139,6 +174,14 @@ def run_experiment(dataset: List[Dict], system_prompt: str, variant_name: str, s
                 name="total_tokens",
                 value=float(total_tokens),
                 comment=f"input={input_tokens}, output={output_tokens}"
+            )
+
+            # C-4: 例示の有無スコアを記録
+            client.score(
+                trace_id=trace.id,
+                name="example_presence",
+                value=evaluation["example_score"],
+                comment=f"has_example={evaluation['has_example']}, patterns={evaluation['example_patterns_found']}"
             )
 
             result = {
