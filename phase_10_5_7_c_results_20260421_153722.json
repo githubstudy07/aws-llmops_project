@@ -1,0 +1,123 @@
+{
+  "session_id": "phase-10-5-7-c-20260421_153634",
+  "timestamp": "2026-04-21T15:37:22.756216",
+  "summary": {
+    "variant_a_baseline": {
+      "avg_score": 0,
+      "total_questions": 0,
+      "scores": []
+    },
+    "variant_b_improved": {
+      "avg_score": 0,
+      "total_questions": 0,
+      "scores": []
+    },
+    "improvement_percentage": 0
+  },
+  "detailed_results": {
+    "variant_a": [
+      {
+        "question_id": "q1",
+        "question": "AWS Lambda の実行時間制限は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q2",
+        "question": "DynamoDB のコンシステントリード（強い一貫性）とは何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q3",
+        "question": "Langfuse で A/B テストを実施する主な利点は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q4",
+        "question": "LangGraph のノードと呼ばれるものの役割を説明してください。",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q5",
+        "question": "Claude のシステムプロンプトでペルソナを定義する場合、どうすればより効果的ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q6",
+        "question": "API レートリミットに達した場合の推奨される対応方法は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q7",
+        "question": "マーケティング AI エージェントで顧客データを分析する際、どの指標が最も重要ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q8",
+        "question": "Bedrock で複数のモデル（Nova, Claude等）を同時に比較する場合、何に注意が必要ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q9",
+        "question": "PromptManagement で プロンプトバージョンを管理する利点は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q10",
+        "question": "GA4 イベントから得た顧客インサイトを AI エージェントにどう反映させますか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      }
+    ],
+    "variant_b": [
+      {
+        "question_id": "q1",
+        "question": "AWS Lambda の実行時間制限は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q2",
+        "question": "DynamoDB のコンシステントリード（強い一貫性）とは何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q3",
+        "question": "Langfuse で A/B テストを実施する主な利点は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q4",
+        "question": "LangGraph のノードと呼ばれるものの役割を説明してください。",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q5",
+        "question": "Claude のシステムプロンプトでペルソナを定義する場合、どうすればより効果的ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q6",
+        "question": "API レートリミットに達した場合の推奨される対応方法は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q7",
+        "question": "マーケティング AI エージェントで顧客データを分析する際、どの指標が最も重要ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q8",
+        "question": "Bedrock で複数のモデル（Nova, Claude等）を同時に比較する場合、何に注意が必要ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q9",
+        "question": "PromptManagement で プロンプトバージョンを管理する利点は何ですか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      },
+      {
+        "question_id": "q10",
+        "question": "GA4 イベントから得た顧客インサイトを AI エージェントにどう反映させますか？",
+        "error": "'Langfuse' object has no attribute 'trace'"
+      }
+    ]
+  }
+}
